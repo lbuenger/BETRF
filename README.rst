@@ -54,6 +54,11 @@ COMPILE cython extensions
 ------------
 python3 setup.py build_ext --inplace
 
+COMPILE sklearn
+------------
+python3 -m pip install --verbose --no-build-isolation --editable .
+
+
 Website: https://scikit-learn.org
 
 Installation
