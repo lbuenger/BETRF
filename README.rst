@@ -50,6 +50,10 @@ for a list of core contributors.
 
 It is currently maintained by a team of volunteers.
 
+COMPILE cython extensions
+------------
+python3 setup.py build_ext --inplace
+
 Website: https://scikit-learn.org
 
 Installation
