@@ -601,7 +601,7 @@ cdef class Gini(ClassificationCriterion):
         index = \sum_{k=0}^{K-1} count_k (1 - count_k)
               = 1 - \sum_{k=0}^{K-1} count_k ** 2
     """
-
+    # TODO: not sure when this is called, called once
     cdef double node_impurity(self) nogil:
         """Evaluate the impurity of the current node.
 
@@ -612,15 +612,28 @@ cdef class Gini(ClassificationCriterion):
         cdef SIZE_t* n_classes = self.n_classes
         cdef double* sum_total = self.sum_total
         cdef double gini = 0.0
-        cdef double sq_count
-        cdef double count_k
+        cdef double sq_count # acc of nr of samples belonging to a certain class squared
+        cdef double count_k # nr of samples belonging to class [c]
         cdef SIZE_t k
         cdef SIZE_t c
 
+        # with gil:
+        #   print("node Im (once)") # exected once
+        #   print("n_out", self.n_outputs) # 1
+        #   print("n_classes", self.n_classes[2])
+
+        # 1 for mnist?
         for k in range(self.n_outputs):
             sq_count = 0.0
 
+            # with gil:
+            #   print("k", k)
+
+            # 10 classes for mnist
             for c in range(n_classes[k]):
+                # with gil:
+                #   print("c", c)
+                #   print("total sum", sum_total[c])
                 count_k = sum_total[c]
                 sq_count += count_k * count_k
 
@@ -631,6 +644,7 @@ cdef class Gini(ClassificationCriterion):
 
         return gini / self.n_outputs
 
+    # called many times
     cdef void children_impurity(self, double* impurity_left,
                                 double* impurity_right) nogil:
         """Evaluate the impurity in children nodes.
@@ -655,6 +669,9 @@ cdef class Gini(ClassificationCriterion):
         cdef double count_k
         cdef SIZE_t k
         cdef SIZE_t c
+
+        # with gil:
+        #   print("children impurity")
 
         for k in range(self.n_outputs):
             sq_count_left = 0.0

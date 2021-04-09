@@ -29,6 +29,11 @@ def configuration(parent_package="", top_path=None):
                          include_dirs=[numpy.get_include()],
                          libraries=libraries,
                          extra_compile_args=["-O3"])
+    config.add_extension("_bfi",
+                         sources=["_bfi.pyx"],
+                         include_dirs=[numpy.get_include()],
+                         libraries=libraries,
+                         extra_compile_args=["-O3"])
 
     config.add_subpackage("tests")
 

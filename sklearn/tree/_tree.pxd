@@ -53,6 +53,8 @@ cdef class Tree:
     cdef Node* nodes                     # Array of nodes
     cdef double* value                   # (capacity, n_outputs, max_n_classes) array of values
     cdef SIZE_t value_stride             # = n_outputs * max_n_classes
+    cdef public SIZE_t bit_flip_injection       # 1: bit flip injection, 0: no bit flip injection
+    cdef public DTYPE_t bit_error_rate          # bit error rate for bit flip injection, defined as a probability of flip per bit
 
     # Methods
     cdef SIZE_t _add_node(self, SIZE_t parent, bint is_left, bint is_leaf,
@@ -66,9 +68,11 @@ cdef class Tree:
     cdef np.ndarray _get_node_ndarray(self)
 
     cpdef np.ndarray predict(self, object X)
+    cpdef np.ndarray get_margins(self, object X)
 
     cpdef np.ndarray apply(self, object X)
     cdef np.ndarray _apply_dense(self, object X)
+    cdef np.ndarray _apply_dense_margins(self, object X)
     cdef np.ndarray _apply_sparse_csr(self, object X)
 
     cpdef object decision_path(self, object X)

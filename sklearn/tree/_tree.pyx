@@ -24,6 +24,9 @@ from libc.string cimport memcpy
 from libc.string cimport memset
 from libc.stdint cimport SIZE_MAX
 
+# from libc.math cimport log
+#from libcpp.list cimport list as cpplist
+
 import numpy as np
 cimport numpy as np
 np.import_array()
@@ -38,6 +41,8 @@ from ._utils cimport PriorityHeap
 from ._utils cimport PriorityHeapRecord
 from ._utils cimport safe_realloc
 from ._utils cimport sizet_ptr_to_ndarray
+
+from ._bfi cimport bfi_float
 
 cdef extern from "numpy/arrayobject.h":
     object PyArray_NewFromDescr(PyTypeObject* subtype, np.dtype descr,
@@ -74,6 +79,8 @@ cdef SIZE_t INITIAL_STACK_SIZE = 10
 # for a more detailed explanation.
 cdef Node dummy;
 NODE_DTYPE = np.asarray(<Node[:1]>(&dummy)).dtype
+
+from libc.stdio cimport printf
 
 # =============================================================================
 # TreeBuilder
@@ -614,6 +621,8 @@ cdef class Tree:
         self.capacity = 0
         self.value = NULL
         self.nodes = NULL
+        self.bit_flip_injection = 0
+        self.bit_error_rate = 0.0
 
     def __dealloc__(self):
         """Destructor."""
@@ -655,7 +664,7 @@ cdef class Tree:
 
         if (node_ndarray.dtype != NODE_DTYPE):
             # possible mismatch of big/little endian due to serialization
-            # on a different architecture. Try swapping the byte order.  
+            # on a different architecture. Try swapping the byte order.
             node_ndarray = node_ndarray.byteswap().newbyteorder()
             if (node_ndarray.dtype != NODE_DTYPE):
                 raise ValueError('Did not recognise loaded array dytpe')
@@ -762,22 +771,37 @@ cdef class Tree:
 
     cpdef np.ndarray predict(self, object X):
         """Predict target for X."""
+        #print("predict()")
+        # Here, self._get_value_ndarray() constructs a numpy presentation of the tree_object with which we called the code, which uses the take() method to do the actual RF model prediction. ( https://hal.inria.fr/hal-03155647/document)
+        # returned array of self.apply(X) represents the indices for the tree structure(which is a 3-dim numpy array). The returned indices are used for accessing the leaf node data. By accessing the leaf data, we will access the actual prediction of the treeself.
+        # output of self.apply(X) is a vector of indices
+        # get the prediction
         out = self._get_value_ndarray().take(self.apply(X), axis=0,
                                              mode='clip')
         if self.n_outputs == 1:
             out = out.reshape(X.shape[0], self.max_n_classes)
         return out
 
+    cpdef np.ndarray get_margins(self, object X):
+        """Returns margins between X and features."""
+        #print("get_margins()")
+        # necessary since we skip the DecisionTreeClassifier object call and the checks implemented there
+        X = np.array(X, dtype=np.float32)
+        out = self._apply_dense_margins(X)
+        return out
+
     cpdef np.ndarray apply(self, object X):
         """Finds the terminal region (=leaf node) for each sample in X."""
         if issparse(X):
+            #print("issparse()")
             return self._apply_sparse_csr(X)
         else:
+            #print("isdense()")
             return self._apply_dense(X)
 
     cdef inline np.ndarray _apply_dense(self, object X):
         """Finds the terminal region (=leaf node) for each sample in X."""
-
+        #print("_apply_dense()")
         # Check input
         if not isinstance(X, np.ndarray):
             raise ValueError("X should be in np.ndarray format, got %s"
@@ -789,29 +813,121 @@ cdef class Tree:
         # Extract input
         cdef const DTYPE_t[:, :] X_ndarray = X
         cdef SIZE_t n_samples = X.shape[0]
+        # Get bit error rate
+        # cdef const float ber_inj = ber
 
         # Initialize output
+        # to understand (n_samples,): https://stackoverflow.com/questions/27570756/difference-between-these-array-shapes-in-numpy
         cdef np.ndarray[SIZE_t] out = np.zeros((n_samples,), dtype=np.intp)
         cdef SIZE_t* out_ptr = <SIZE_t*> out.data
 
         # Initialize auxiliary data-structure
         cdef Node* node = NULL
         cdef SIZE_t i = 0
+        # threshold faulty for bit flip injection
+        cdef DTYPE_t threshold_f
+        #cdef SIZE_t level_d = 0
+        #cdef float margin = 0
 
-        with nogil:
+        if self.bit_flip_injection == 0:
+            #print("NO BFI _apply_dense")
+            with nogil:
+                for i in range(n_samples):
+                    node = self.nodes
+                    # While node not a leaf
+                    #level_d = 0
+                    while node.left_child != _TREE_LEAF:
+                        # ... and node.right_child != _TREE_LEAF:
+                        # if X_ndarray[i, node.feature] <= node.threshold:
+                        #   margin = node.threshold - X_ndarray[i, node.feature]
+                        # else:
+                        #   margin = X_ndarray[i, node.feature] - node.threshold
+                        #printf("Sample: %d, level %d, margin: %.2f\n", i, level_d, margin)
+                        if X_ndarray[i, node.feature] <= node.threshold:
+                            node = &self.nodes[node.left_child]
+                        else:
+                            node = &self.nodes[node.right_child]
+                        #level_d += 1
+                    out_ptr[i] = <SIZE_t>(node - self.nodes)  # node offset
+        else:
+            #print("BFI _apply_dense")
+            for i in range(n_samples):
+                node = self.nodes
+                while node.left_child != _TREE_LEAF:
+                    # ... and node.right_child != _TREE_LEAF:
+                    # if X_ndarray[i, node.feature] <= node.threshold:
+                    #   margin = node.threshold - X_ndarray[i, node.feature]
+                    # else:
+                    #   margin = X_ndarray[i, node.feature] - node.threshold
+                    #printf("Sample: %d, level %d, margin: %.2f\n", i, level_d, margin)
+                    threshold_f = node.threshold
+                    threshold_f = bfi_float(threshold_f, self.bit_error_rate)
+                    if X_ndarray[i, node.feature] <= threshold_f:
+                        node = &self.nodes[node.left_child]
+                    else:
+                        node = &self.nodes[node.right_child]
+                    #level_d += 1
+                out_ptr[i] = <SIZE_t>(node - self.nodes)  # node offset
+        return out
+
+    cdef inline np.ndarray _apply_dense_margins(self, object X):
+        """Finds the terminal region (=leaf node) for each sample in X."""
+        #print("_apply_dense_margins()")
+        # Check input
+        if not isinstance(X, np.ndarray):
+            raise ValueError("X should be in np.ndarray format, got %s"
+                             % type(X))
+
+        if X.dtype != DTYPE:
+            raise ValueError("X.dtype should be np.float32, got %s" % X.dtype)
+
+        # Extract input
+        cdef const DTYPE_t[:, :] X_ndarray = X
+        cdef SIZE_t n_samples = X.shape[0]
+        # Get bit error rate
+        # cdef const float ber_inj = ber
+
+        # Initialize output
+        # to understand (n_samples,): https://stackoverflow.com/questions/27570756/difference-between-these-array-shapes-in-numpy
+        cdef np.ndarray[SIZE_t] out = np.zeros((n_samples,), dtype=np.intp)
+        cdef SIZE_t* out_ptr = <SIZE_t*> out.data
+
+        # output for margins: margins, features, split values
+        cdef list margins = [[],[],[]]
+        # cdef SIZE_t prelim_depth = 10
+        #cdef np.ndarray[SIZE_t] margins = np.zeros(prelim_depth, dtype=np.float32)
+
+        # Initialize auxiliary data-structure
+        cdef Node* node = NULL
+        cdef SIZE_t i = 0
+
+        cdef SIZE_t level_d = 0
+        cdef float margin = 0
+
+        if 1:
+        #with nogil:
             for i in range(n_samples):
                 node = self.nodes
                 # While node not a leaf
+                level_d = 0
                 while node.left_child != _TREE_LEAF:
                     # ... and node.right_child != _TREE_LEAF:
+                    if X_ndarray[i, node.feature] <= node.threshold:
+                      margin = node.threshold - X_ndarray[i, node.feature]
+                    else:
+                      margin = X_ndarray[i, node.feature] - node.threshold
+                    #printf("Sample: %d, level %d, margin: %.2f\n", i, level_d, margin)
+                    margins[0].append(margin)
+                    margins[1].append(X_ndarray[i, node.feature])
+                    margins[2].append(node.threshold)
                     if X_ndarray[i, node.feature] <= node.threshold:
                         node = &self.nodes[node.left_child]
                     else:
                         node = &self.nodes[node.right_child]
-
+                    level_d += 1
                 out_ptr[i] = <SIZE_t>(node - self.nodes)  # node offset
 
-        return out
+        return np.array(margins)
 
     cdef inline np.ndarray _apply_sparse_csr(self, object X):
         """Finds the terminal region (=leaf node) for each sample in sparse X.

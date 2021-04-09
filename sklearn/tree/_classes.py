@@ -145,8 +145,12 @@ class BaseDecisionTree(MultiOutputMixin, BaseEstimator, metaclass=ABCMeta):
 
         random_state = check_random_state(self.random_state)
 
+        print("fitting tree")
+
         if self.ccp_alpha < 0.0:
             raise ValueError("ccp_alpha must be greater than or equal to 0")
+
+        # fitting
 
         if check_input:
             # Need to validate separately here.
@@ -343,6 +347,8 @@ class BaseDecisionTree(MultiOutputMixin, BaseEstimator, metaclass=ABCMeta):
 
         # Build tree
         criterion = self.criterion
+        print("criterion", criterion)
+        print("d", CRITERIA_CLF[self.criterion])
         if not isinstance(criterion, Criterion):
             if is_classification:
                 criterion = CRITERIA_CLF[self.criterion](self.n_outputs_,
