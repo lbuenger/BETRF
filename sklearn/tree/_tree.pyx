@@ -144,6 +144,8 @@ cdef class DepthFirstTreeBuilder(TreeBuilder):
                 np.ndarray sample_weight=None):
         """Build a decision tree from the training set (X, y)."""
 
+        print("in build() of _tree.pyx in DepthFirstTreeBuilder")
+
         # check input
         X, y, sample_weight = self._check_input(X, y, sample_weight)
 
@@ -172,6 +174,8 @@ cdef class DepthFirstTreeBuilder(TreeBuilder):
 
         # Recursive partition (without actual recursion)
         splitter.init(X, y, sample_weight_ptr)
+
+        print("init splitter in _tree.pyx")
 
         cdef SIZE_t start
         cdef SIZE_t end
@@ -221,6 +225,9 @@ cdef class DepthFirstTreeBuilder(TreeBuilder):
                            n_node_samples < 2 * min_samples_leaf or
                            weighted_n_node_samples < 2 * min_weight_leaf)
 
+                # call splitter
+                # print("call splitter in _tree.pyx")
+                # print("This loop may be called many times.pyx")
                 if first:
                     impurity = splitter.node_impurity()
                     first = 0
@@ -623,6 +630,7 @@ cdef class Tree:
         self.nodes = NULL
         self.bit_flip_injection = 0
         self.bit_error_rate = 0.0
+        self.nr_child_idx = 0
 
     def __dealloc__(self):
         """Destructor."""

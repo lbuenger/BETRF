@@ -23,6 +23,52 @@ def readFile(path):
     Y = np.array(Y)-min(Y)
     return np.array(X).astype(dtype=np.int32), Y
 
+def get_nr_child_idx(clf):
+    n_nodes = clf.tree_.node_count
+    children_left = clf.tree_.children_left
+    children_right = clf.tree_.children_right
+    feature = clf.tree_.feature
+    threshold = clf.tree_.threshold
+    n_leaves_h = 0
+
+    node_depth = np.zeros(shape=n_nodes, dtype=np.int64)
+    is_leaves = np.zeros(shape=n_nodes, dtype=bool)
+    stack = [(0, 0)]  # start with the root node id (0) and its depth (0)
+    while len(stack) > 0:
+        # `pop` ensures each node is only visited once
+        node_id, depth = stack.pop()
+        node_depth[node_id] = depth
+
+        # If the left and right child of a node is not the same we have a split
+        # node
+        is_split_node = children_left[node_id] != children_right[node_id]
+        # If a split node, append left and right children and depth to `stack`
+        # so we can loop through them
+        if is_split_node:
+            stack.append((children_left[node_id], depth + 1))
+            stack.append((children_right[node_id], depth + 1))
+        else:
+            is_leaves[node_id] = True
+
+    # print("The binary tree structure has {n} nodes and has "
+    #       "the following tree structure:\n".format(n=n_nodes))
+    for i in range(n_nodes):
+        if is_leaves[i]:
+            # print("{space}node={node} is a leaf node.".format(
+            #     space=node_depth[i] * "\t", node=i))
+            n_leaves_h += 1
+        #else:
+            # print("{space}node={node} is a split node: "
+            #       "go to node {left} if X[:, {feature}] <= {threshold} "
+            #       "else to node {right}.".format(
+            #           space=node_depth[i] * "\t",
+            #           node=i,
+            #           left=children_left[i],
+            #           feature=feature[i],
+            #           threshold=threshold[i],
+            #           right=children_right[i]))
+    return n_nodes - n_leaves_h
+
 def main(argv):
     # IRIS
     '''
@@ -44,6 +90,7 @@ def main(argv):
     clf = tree.DecisionTreeClassifier(max_depth=5)
     clf = clf.fit(X_train, y_train)
     out = clf.predict(X_train)
+    print("---------- TRAINING ENDED ----------\n")
     print("Accuracy (train)", accuracy_score(y_train, out))
 
     # extract margins from tree
@@ -57,6 +104,15 @@ def main(argv):
     print("ber before", clf.tree_.bit_error_rate)
     clf.tree_.bit_error_rate = np.array(0.01, dtype=np.float32)
     print("ber after", clf.tree_.bit_error_rate)
+
+    ### Find out number of nodes that are not lead nodes
+    ### For determining the required number of bits for addressing child indices
+    ### per tree
+    nr_ch_idx = get_nr_child_idx(clf)
+    nr_ch_idx *= 2
+    print("nr child index before", clf.tree_.nr_child_idx)
+    clf.tree_.nr_child_idx = np.floor(np.log2(nr_ch_idx)) + 1
+    print("nr child index after", clf.tree_.nr_child_idx)
 
     print("---------- BER TEST ----------")
 

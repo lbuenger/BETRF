@@ -55,6 +55,7 @@ cdef class Tree:
     cdef SIZE_t value_stride             # = n_outputs * max_n_classes
     cdef public SIZE_t bit_flip_injection       # 1: bit flip injection, 0: no bit flip injection
     cdef public DTYPE_t bit_error_rate          # bit error rate for bit flip injection, defined as a probability of flip per bit
+    cdef public SIZE_t nr_child_idx       # number of child indices in tree
 
     # Methods
     cdef SIZE_t _add_node(self, SIZE_t parent, bint is_left, bint is_leaf,
