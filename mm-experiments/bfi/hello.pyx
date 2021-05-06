@@ -93,7 +93,7 @@ cdef DTYPE_t bfi_float (DTYPE_t x, DTYPE_t ber):
 
     return x
 
-cdef SIZE_t bfi_intp (SIZE_t x, DTYPE_t ber):
+cdef SIZE_t bfi_intp (SIZE_t x, DTYPE_t ber, SIZE_t bits):
     cdef np.ndarray[DTYPE_t] randomval = np.random.uniform(low=0.0, high=1.0, size=64).astype('float32')
     #print(randomval)
 
@@ -102,11 +102,11 @@ cdef SIZE_t bfi_intp (SIZE_t x, DTYPE_t ber):
     #cdef UINT32_t bfi_val = (bfi_val_uintp)[0]
 
     # get number of nodes
-    cdef SIZE_t nr_nodes = x #self.node_count
-    cdef SIZE_t bits_needed = 0
-
-    bits_needed = np.floor(np.log2(nr_nodes)) + 1
-    print(bits_needed)
+    # cdef SIZE_t nr_nodes = x #self.node_count
+    # cdef SIZE_t bits_needed = 0
+    #
+    # bits_needed = np.floor(np.log2(nr_nodes)) + 1
+    # print(bits_needed)
 
     # use memcpy to do bit operations on floating point (avoids strict aliasing rule)
     cdef UINT64_t bfi_val;
@@ -123,7 +123,7 @@ cdef SIZE_t bfi_intp (SIZE_t x, DTYPE_t ber):
     printf("\n\n")
 
     cdef UINT64_t injector = 0x1
-    for i in range(64-bits_needed,64):
+    for i in range(64-bits,64):
       if randomval[i] < ber:
         bfi_val ^= injector
       injector <<= 1
@@ -162,7 +162,8 @@ cpdef print_result ():
 
     # bit flip injection into intp (indices)
     cdef SIZE_t index = 32;
+    cdef SIZE_t nr_bits = 8
     # print(sizeof(index))
     print(index)
-    cdef SIZE_t end_intp = bfi_intp(index, ber)
+    cdef SIZE_t end_intp = bfi_intp(index, ber, nr_bits)
     print(end_intp)

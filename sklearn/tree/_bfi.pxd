@@ -26,6 +26,9 @@ ctypedef np.npy_float64 DOUBLE_t         # Type of y, sample_weight
 ctypedef np.npy_intp SIZE_t              # Type for indices and counters
 ctypedef np.npy_int32 INT32_t            # Signed 32 bit integer
 ctypedef np.npy_uint32 UINT32_t          # Unsigned 32 bit integer
+ctypedef np.npy_uint64 UINT64_t          # Unsigned 64 bit integer
 
 # bit flip injection into floating point value (32 bit)
 cdef DTYPE_t bfi_float (DTYPE_t x, DTYPE_t ber)
+# bit flip injection into integer value
+cdef SIZE_t bfi_intp (SIZE_t x, DTYPE_t ber, SIZE_t bits)

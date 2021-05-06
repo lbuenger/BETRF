@@ -43,6 +43,7 @@ from ._utils cimport safe_realloc
 from ._utils cimport sizet_ptr_to_ndarray
 
 from ._bfi cimport bfi_float
+from ._bfi cimport bfi_intp
 
 cdef extern from "numpy/arrayobject.h":
     object PyArray_NewFromDescr(PyTypeObject* subtype, np.dtype descr,
@@ -628,9 +629,12 @@ cdef class Tree:
         self.capacity = 0
         self.value = NULL
         self.nodes = NULL
-        self.bit_flip_injection = 0
-        self.bit_error_rate = 0.0
+        self.bit_flip_injection_split = 0
+        self.bit_flip_injection_chidx = 0
+        self.bit_error_rate_split = 0.0
+        self.bit_error_rate_chidx = 0.0
         self.nr_child_idx = 0
+        self.aborted = 0
 
     def __dealloc__(self):
         """Destructor."""
@@ -834,10 +838,13 @@ cdef class Tree:
         cdef SIZE_t i = 0
         # threshold faulty for bit flip injection
         cdef DTYPE_t threshold_f
+        cdef UINT64_t l_child_f;
+        cdef UINT64_t r_child_f;
+        cdef SIZE_t error_in_child = 0
         #cdef SIZE_t level_d = 0
         #cdef float margin = 0
 
-        if self.bit_flip_injection == 0:
+        if (self.bit_flip_injection_split == 0) and (self.bit_flip_injection_chidx == 0):
             #print("NO BFI _apply_dense")
             with nogil:
                 for i in range(n_samples):
@@ -851,6 +858,7 @@ cdef class Tree:
                         # else:
                         #   margin = X_ndarray[i, node.feature] - node.threshold
                         #printf("Sample: %d, level %d, margin: %.2f\n", i, level_d, margin)
+
                         if X_ndarray[i, node.feature] <= node.threshold:
                             node = &self.nodes[node.left_child]
                         else:
@@ -868,13 +876,44 @@ cdef class Tree:
                     # else:
                     #   margin = X_ndarray[i, node.feature] - node.threshold
                     #printf("Sample: %d, level %d, margin: %.2f\n", i, level_d, margin)
-                    threshold_f = node.threshold
-                    threshold_f = bfi_float(threshold_f, self.bit_error_rate)
-                    if X_ndarray[i, node.feature] <= threshold_f:
-                        node = &self.nodes[node.left_child]
+
+                    # BFI into child indices
+                    if (self.bit_flip_injection_chidx == 1):
+                        l_child_f = node.left_child
+                        r_child_f = node.right_child
+                        l_child_f = bfi_intp(l_child_f, self.bit_error_rate_chidx, self.nr_child_idx)
+                        r_child_f = bfi_intp(r_child_f, self.bit_error_rate_chidx, self.nr_child_idx)
+                        # check if an error occured
+                        if (l_child_f != node.left_child) or (r_child_f != node.right_child):
+                            error_in_child == 1
+                            self.aborted = 1
+                            # return output with all zeros
+                            # print("Out ptr", out_ptr[i])
+                            # print("OUT", out)
+                            out = np.zeros((n_samples,), dtype=np.intp)
+                            # print("Out ptr", out_ptr[i])
+                            # print("OUT", out)
+                            return out
+
+                    # BFI into threshold
+                    if (self.bit_flip_injection_split == 1):
+                        threshold_f = node.threshold
+                        threshold_f = bfi_float(threshold_f, self.bit_error_rate_split)
+                        if X_ndarray[i, node.feature] <= threshold_f:
+                            node = &self.nodes[node.left_child]
+                            # using faulty child can cause segmentation faults, don't try
+                            # node = &self.nodes[l_child_f]
+                        else:
+                            node = &self.nodes[node.right_child]
+                            # node = &self.nodes[r_child_f]
+                        #level_d += 1
+                    # No BFI in threshold
                     else:
-                        node = &self.nodes[node.right_child]
-                    #level_d += 1
+                        if X_ndarray[i, node.feature] <= node.threshold:
+                            node = &self.nodes[node.left_child]
+                        else:
+                            node = &self.nodes[node.right_child]
+
                 out_ptr[i] = <SIZE_t>(node - self.nodes)  # node offset
         return out
 

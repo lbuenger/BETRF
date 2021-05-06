@@ -18,6 +18,7 @@ ctypedef np.npy_float64 DOUBLE_t         # Type of y, sample_weight
 ctypedef np.npy_intp SIZE_t              # Type for indices and counters
 ctypedef np.npy_int32 INT32_t            # Signed 32 bit integer
 ctypedef np.npy_uint32 UINT32_t          # Unsigned 32 bit integer
+ctypedef np.npy_uint64 UINT64_t          # Unsigned 64 bit integer
 
 from ._splitter cimport Splitter
 from ._splitter cimport SplitRecord
@@ -53,9 +54,12 @@ cdef class Tree:
     cdef Node* nodes                     # Array of nodes
     cdef double* value                   # (capacity, n_outputs, max_n_classes) array of values
     cdef SIZE_t value_stride             # = n_outputs * max_n_classes
-    cdef public SIZE_t bit_flip_injection       # 1: bit flip injection, 0: no bit flip injection
-    cdef public DTYPE_t bit_error_rate          # bit error rate for bit flip injection, defined as a probability of flip per bit
+    cdef public SIZE_t bit_flip_injection_split       # 1: bit flip injection, 0: no bit flip injection
+    cdef public SIZE_t bit_flip_injection_chidx       # 1: bit flip injection, 0: no bit flip injection
+    cdef public DTYPE_t bit_error_rate_split          # bit error rate for bit flip injection, defined as a probability of flip per bit
+    cdef public DTYPE_t bit_error_rate_chidx          # bit error rate for bit flip injection, defined as a probability of flip per bit
     cdef public SIZE_t nr_child_idx       # number of child indices in tree
+    cdef public SIZE_t aborted       # 1: aborted, 0: not aborted (in case of access violations due to array-index out of bounds)
 
     # Methods
     cdef SIZE_t _add_node(self, SIZE_t parent, bint is_left, bint is_leaf,

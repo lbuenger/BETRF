@@ -98,12 +98,18 @@ def main(argv):
     margins_data = clf.tree_.get_margins(X_train)
 
     # bit flip injection data
-    print("bfi before", clf.tree_.bit_flip_injection)
-    clf.tree_.bit_flip_injection = 1
-    print("bfi after", clf.tree_.bit_flip_injection)
-    print("ber before", clf.tree_.bit_error_rate)
-    clf.tree_.bit_error_rate = np.array(0.01, dtype=np.float32)
-    print("ber after", clf.tree_.bit_error_rate)
+    print("bfi split before", clf.tree_.bit_flip_injection_split)
+    print("bfi ch_idx before", clf.tree_.bit_flip_injection_chidx)
+    clf.tree_.bit_flip_injection_split = 1
+    clf.tree_.bit_flip_injection_chidx = 1
+    print("bfi split after", clf.tree_.bit_flip_injection_split)
+    print("bfi ch_idx after", clf.tree_.bit_flip_injection_chidx)
+    print("ber split before", clf.tree_.bit_error_rate_split)
+    print("ber ch_idx before", clf.tree_.bit_error_rate_chidx)
+    clf.tree_.bit_error_rate_split = np.array(0.01, dtype=np.float32)
+    clf.tree_.bit_error_rate_chidx = np.array(0.098, dtype=np.float32)
+    print("ber split after", clf.tree_.bit_error_rate_split)
+    print("ber ch_idx after", clf.tree_.bit_error_rate_chidx)
 
     ### Find out number of nodes that are not lead nodes
     ### For determining the required number of bits for addressing child indices
@@ -116,21 +122,27 @@ def main(argv):
 
     print("---------- BER TEST ----------")
 
-    bers = np.array([i*0.001 for i in range(100)], dtype=np.float32)
+    bers = np.array([i*0.0000001 for i in range(10)], dtype=np.float32)
     reps = 5
     for ber in bers:
-        clf.tree_.bit_error_rate = ber
+        aborted_counter = 0
+        clf.tree_.bit_error_rate_split = ber
+        clf.tree_.bit_error_rate_chidx = ber
         acc_scores = []
         for rep in range(reps):
             out = clf.predict(X_test)
             acc_scores.append(accuracy_score(y_test, out))
+            aborted_counter += clf.tree_.aborted
+            # reset abouted counters in trees
+            clf.tree_.aborted = 0
         acc_scores_np = np.array(acc_scores)
         acc_mean = np.mean(acc_scores_np)
         acc_min = np.min(acc_scores_np)
         acc_max = np.max(acc_scores_np)
         # print("BER: {:.4f}, Accuracy: {:.4f} ({:.4f},{:.4f})".format(ber, acc_mean, acc_mean - acc_min, acc_max - acc_mean))
-        print("{:.4f} {:.4f} {:.4f} {:.4f}".format(ber*100, (acc_mean)*100, (acc_mean - acc_min)*100, (acc_max - acc_mean)*100))
-        break
+        print("{:.4f} {:.4f} {:.4f} {:.4f} (aborted:{})".format(ber*100, (acc_mean)*100, (acc_mean - acc_min)*100, (acc_max - acc_mean)*100, aborted_counter))
+        # print("{:.4f} {:.4f} {:.4f} {:.4f} (aborted:{})".format(ber*100, (acc_mean)*100, (acc_mean - acc_min)*100, (acc_max - acc_mean)*100, aborted_counter))
+        # break
 
     '''
     # RF
