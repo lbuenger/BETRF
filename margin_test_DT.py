@@ -85,7 +85,7 @@ def main(argv):
     X_test,y_test = readFile("/home/mikail/uni/rmud/scikit-learn/mm-experiments/mnist/test.csv")
     #'''
 
-
+    nr_features = X_train.shape[1]
     # DT
     clf = tree.DecisionTreeClassifier(max_depth=5)
     clf = clf.fit(X_train, y_train)
@@ -100,16 +100,23 @@ def main(argv):
     # bit flip injection data
     print("bfi split before", clf.tree_.bit_flip_injection_split)
     print("bfi ch_idx before", clf.tree_.bit_flip_injection_chidx)
+    print("bfi feat_idx before", clf.tree_.bit_flip_injection_featidx)
     clf.tree_.bit_flip_injection_split = 1
     clf.tree_.bit_flip_injection_chidx = 1
+    clf.tree_.bit_flip_injection_featidx = 1
     print("bfi split after", clf.tree_.bit_flip_injection_split)
     print("bfi ch_idx after", clf.tree_.bit_flip_injection_chidx)
+    print("bfi feat_idx after", clf.tree_.bit_flip_injection_featidx)
     print("ber split before", clf.tree_.bit_error_rate_split)
     print("ber ch_idx before", clf.tree_.bit_error_rate_chidx)
     clf.tree_.bit_error_rate_split = np.array(0.01, dtype=np.float32)
     clf.tree_.bit_error_rate_chidx = np.array(0.098, dtype=np.float32)
     print("ber split after", clf.tree_.bit_error_rate_split)
     print("ber ch_idx after", clf.tree_.bit_error_rate_chidx)
+
+    print("ber feat_idx before", clf.tree_.bit_error_rate_featidx)
+    clf.tree_.bit_error_rate_featidx = np.array(0.0966, dtype=np.float32)
+    print("ber feat_idx after", clf.tree_.bit_error_rate_featidx)
 
     ### Find out number of nodes that are not lead nodes
     ### For determining the required number of bits for addressing child indices
@@ -120,6 +127,11 @@ def main(argv):
     clf.tree_.nr_child_idx = np.floor(np.log2(nr_ch_idx)) + 1
     print("nr child index after", clf.tree_.nr_child_idx)
 
+    print("nr feature index before", clf.tree_.nr_feature_idx)
+    clf.tree_.nr_feature_idx = np.floor(np.log2(nr_features)) + 1
+    print("nr feature index after", clf.tree_.nr_feature_idx)
+    # print("x shape test", X_train.shape[1])
+
     print("---------- BER TEST ----------")
 
     bers = np.array([i*0.0000001 for i in range(10)], dtype=np.float32)
@@ -128,6 +140,7 @@ def main(argv):
         aborted_counter = 0
         clf.tree_.bit_error_rate_split = ber
         clf.tree_.bit_error_rate_chidx = ber
+        clf.tree_.bit_error_rate_featidx = ber
         acc_scores = []
         for rep in range(reps):
             out = clf.predict(X_test)
