@@ -145,7 +145,7 @@ cdef class DepthFirstTreeBuilder(TreeBuilder):
                 np.ndarray sample_weight=None):
         """Build a decision tree from the training set (X, y)."""
 
-        print("in build() of _tree.pyx in DepthFirstTreeBuilder")
+        # print("in build() of _tree.pyx in DepthFirstTreeBuilder")
 
         # check input
         X, y, sample_weight = self._check_input(X, y, sample_weight)
@@ -176,7 +176,7 @@ cdef class DepthFirstTreeBuilder(TreeBuilder):
         # Recursive partition (without actual recursion)
         splitter.init(X, y, sample_weight_ptr)
 
-        print("init splitter in _tree.pyx")
+        # print("init splitter in _tree.pyx")
 
         cdef SIZE_t start
         cdef SIZE_t end
@@ -908,7 +908,7 @@ cdef class Tree:
                         feature_idx_f = bfi_intp(feature_idx_f, self.bit_error_rate_featidx, self.nr_feature_idx)
                         if feature_idx_f > (X.shape[1]-1):
                             feature_idx_f = 0
-                            print("feat out of b")
+                            #print("feat out of b")
                     else:
                         feature_idx_f = node.feature
 

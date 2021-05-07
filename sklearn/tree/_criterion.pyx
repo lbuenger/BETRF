@@ -618,9 +618,9 @@ cdef class Gini(ClassificationCriterion):
         cdef SIZE_t c
 
         # with gil:
-        #   print("node Im (once)") # exected once
-        #   print("n_out", self.n_outputs) # 1
-        #   print("n_classes", self.n_classes[2])
+            # print("node_impurity()") # exected once
+            # print("n_out", self.n_outputs) # 1
+            # print("n_classes", self.n_classes[2])
 
         # 1 for mnist?
         for k in range(self.n_outputs):
@@ -671,7 +671,7 @@ cdef class Gini(ClassificationCriterion):
         cdef SIZE_t c
 
         # with gil:
-        #   print("children impurity")
+        #     print("children_impurity()")
 
         for k in range(self.n_outputs):
             sq_count_left = 0.0
