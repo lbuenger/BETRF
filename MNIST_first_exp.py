@@ -6,6 +6,50 @@ import numpy as np
 from sklearn.metrics import accuracy_score, precision_score, recall_score, precision_recall_curve, average_precision_score
 import matplotlib.pyplot as plt
 from pandas.core.common import flatten
+from datetime import datetime
+import os
+
+# Preparations and configs
+################################################################################
+# paths to train and test
+train_path = "/home/mikail/uni/rmud/scikit-learn/mm-experiments/mnist/train.csv"
+test_path = "/home/mikail/uni/rmud/scikit-learn/mm-experiments/mnist/test.csv"
+
+# RF config
+depths = [5, 10]
+estims = [5, 10]
+
+# configs for bit flip injection
+split_inj = 1
+feature_idx_inj = 0
+child_idx_inj = 0
+reps = 5 # how many times to evaluate for one bit error rate
+
+# config for x axis in plot
+temp = [1, 2.5, 5.0, 7.5] # steps between powers of 10
+nr_points = 6 # exponent to begin with, begin at 10**(-nr_points-1)
+ber_array = [0]
+ber_array.append([temp[i]*((10)**(-nr_points-1)) for i in range(len(temp))])
+ber_array = list(flatten(ber_array))
+rest_array = [1*(10**(-nr_points+i)) for i in range(nr_points)]
+for point in rest_array:
+    for step in temp:
+        ber_array.append(point*step)
+bers = np.array(ber_array, dtype=np.float32)
+bers = bers[:-1]
+
+# create experiment folder
+exp_path = ""
+access_rights = 0o755
+this_path = os.getcwd()
+exp_path += this_path+"/experiments/"+"results-"+datetime.now().strftime('%d-%m-%Y-%H:%M:%S')
+try:
+    os.makedirs(exp_path, access_rights, exist_ok=False)
+except OSError:
+    print ("Creation of the directory %s failed" % exp_path)
+else:
+    print ("Successfully created the directory %s" % exp_path)
+################################################################################
 
 #sys.path.append('/home/mikail/uni/rmud/scikit-learn/mm-experiments/mnist')
 def readFile(path):
@@ -72,16 +116,17 @@ def get_nr_child_idx(clf):
 
 def main(argv):
 
-    # MNIST
-    #'''
-    X_train,y_train = readFile("/home/mikail/uni/rmud/scikit-learn/mm-experiments/mnist/train.csv")
-    X_test,y_test = readFile("/home/mikail/uni/rmud/scikit-learn/mm-experiments/mnist/test.csv")
-    #'''
-    nr_features = X_train.shape[1]
+    # write experiment data to file
+    exp_data = open(exp_path + "/results.txt", "a")
+    exp_data.write(train_path+"\n")
+    exp_data.write(test_path+"\n")
+    # exp_data.close()
 
-    # RF
-    depths = [5, 10]
-    estims = [5, 10]
+    # only for MNIST
+    X_train,y_train = readFile(train_path)
+    X_test,y_test = readFile(test_path)
+
+    nr_features = X_train.shape[1]
 
     for dep in depths:
         for est in estims:
@@ -103,35 +148,32 @@ def main(argv):
             # print("ber before", clf.tree_.bit_error_rate)
             # clf.tree_.bit_error_rate = np.array(0.01, dtype=np.float32)
             # print("ber after", clf.tree_.bit_error_rate)
-
-            print("---------- BER TEST ----------")
-            print("trees: {}, depth: {}".format(str(est), str(dep)))
-            nr_points = 6
-            ber_array = [0]
-            ber_array.append([1*(10**(-nr_points+i)) for i in range(nr_points)])
-            ber_array = list(flatten(ber_array))
-            # print(ber_array)
-            bers = np.array(ber_array, dtype=np.float32)
-            reps = 5
+            # exp_data = open(exp_path + "/results.txt", "a")
+            exp_data.write("---------- BER TEST ----------\n")
+            exp_data.write("trees: {}, depth: {}\n".format(str(est), str(dep)))
+            # exp_data.close()
             for ber in bers:
                 for tree in clf.estimators_:
                     #print(tree)
 
                     # split value injection
-                    # tree.tree_.bit_error_rate_split = ber
-                    # tree.tree_.bit_flip_injection_split = 1
+                    if split_inj == 1:
+                        tree.tree_.bit_error_rate_split = ber
+                        tree.tree_.bit_flip_injection_split = 1
 
                     # feature index injection
-                    # tree.tree_.bit_error_rate_featidx = ber
-                    # tree.tree_.bit_flip_injection_featidx = 1
-                    # tree.tree_.nr_feature_idx = np.floor(np.log2(nr_features)) + 1
+                    if feature_idx_inj == 1:
+                        tree.tree_.bit_error_rate_featidx = ber
+                        tree.tree_.bit_flip_injection_featidx = 1
+                        tree.tree_.nr_feature_idx = np.floor(np.log2(nr_features)) + 1
 
                     # child indices injection
-                    nr_ch_idx = get_nr_child_idx(tree)
-                    nr_ch_idx *= 2
-                    tree.tree_.nr_child_idx = np.floor(np.log2(nr_ch_idx)) + 1
-                    tree.tree_.bit_error_rate_chidx = ber
-                    tree.tree_.bit_flip_injection_chidx = 1
+                    if child_idx_inj == 1:
+                        nr_ch_idx = get_nr_child_idx(tree)
+                        nr_ch_idx *= 2
+                        tree.tree_.nr_child_idx = np.floor(np.log2(nr_ch_idx)) + 1
+                        tree.tree_.bit_error_rate_chidx = ber
+                        tree.tree_.bit_flip_injection_chidx = 1
 
                 acc_scores = []
                 for rep in range(reps):
@@ -142,7 +184,9 @@ def main(argv):
                 acc_min = np.min(acc_scores_np)
                 acc_max = np.max(acc_scores_np)
                 # print("BER: {:.4f}, Accuracy: {:.4f} ({:.4f},{:.4f})".format(ber, acc_mean, acc_mean - acc_min, acc_max - acc_mean))
-                print("{:.8f} {:.4f} {:.4f} {:.4f}".format(ber*100, (acc_mean)*100, (acc_max - acc_mean)*100, (acc_mean - acc_min)*100))
-
+                # exp_data = open(exp_path + "/results.txt", "a")
+                exp_data.write("{:.8f} {:.4f} {:.4f} {:.4f}\n".format(ber*100, (acc_mean)*100, (acc_max - acc_mean)*100, (acc_mean - acc_min)*100))
+                # exp_data.close()
+    exp_data.close()
 if __name__ == "__main__":
    main(sys.argv[1:])
