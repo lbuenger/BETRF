@@ -145,7 +145,7 @@ class BaseDecisionTree(MultiOutputMixin, BaseEstimator, metaclass=ABCMeta):
 
         random_state = check_random_state(self.random_state)
 
-        print("fitting tree")
+        # print("--- in fit() ---")
 
         if self.ccp_alpha < 0.0:
             raise ValueError("ccp_alpha must be greater than or equal to 0")
@@ -347,8 +347,7 @@ class BaseDecisionTree(MultiOutputMixin, BaseEstimator, metaclass=ABCMeta):
 
         # Build tree
         criterion = self.criterion
-        print("criterion", criterion)
-        print("d", CRITERIA_CLF[self.criterion])
+        # print("Initializing criterion", criterion)
         if not isinstance(criterion, Criterion):
             if is_classification:
                 criterion = CRITERIA_CLF[self.criterion](self.n_outputs_,
@@ -364,6 +363,7 @@ class BaseDecisionTree(MultiOutputMixin, BaseEstimator, metaclass=ABCMeta):
         SPLITTERS = SPARSE_SPLITTERS if issparse(X) else DENSE_SPLITTERS
 
         splitter = self.splitter
+        # print("Initializing splitter", splitter)
         if not isinstance(self.splitter, Splitter):
             splitter = SPLITTERS[self.splitter](criterion,
                                                 self.max_features_,
@@ -371,6 +371,7 @@ class BaseDecisionTree(MultiOutputMixin, BaseEstimator, metaclass=ABCMeta):
                                                 min_weight_leaf,
                                                 random_state)
 
+        # print("Initializing tree")
         if is_classifier(self):
             self.tree_ = Tree(self.n_features_,
                               self.n_classes_, self.n_outputs_)
@@ -380,6 +381,7 @@ class BaseDecisionTree(MultiOutputMixin, BaseEstimator, metaclass=ABCMeta):
                               np.array([1] * self.n_outputs_, dtype=np.intp),
                               self.n_outputs_)
 
+        # print("Initializing builders")
         # Use BestFirst if max_leaf_nodes given; use DepthFirst otherwise
         if max_leaf_nodes < 0:
             builder = DepthFirstTreeBuilder(splitter, min_samples_split,
@@ -397,6 +399,7 @@ class BaseDecisionTree(MultiOutputMixin, BaseEstimator, metaclass=ABCMeta):
                                            self.min_impurity_decrease,
                                            min_impurity_split)
 
+        # print("Build tree")
         builder.build(self.tree_, X, y, sample_weight)
 
         if self.n_outputs_ == 1 and is_classifier(self):

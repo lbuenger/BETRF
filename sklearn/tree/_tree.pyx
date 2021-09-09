@@ -1040,11 +1040,49 @@ cdef class Tree:
         safe_realloc(&X_sample, n_features)
         safe_realloc(&feature_to_sample, n_features)
 
-        with nogil:
-            memset(feature_to_sample, -1, n_features * sizeof(SIZE_t))
 
+        memset(feature_to_sample, -1, n_features * sizeof(SIZE_t))
+
+        cdef DTYPE_t threshold_f1
+        cdef UINT64_t l_child_f1;
+        cdef UINT64_t r_child_f1;
+        cdef SIZE_t error_in_child1 = 0
+        cdef SIZE_t feature_idx_f1 = 0
+
+        if (self.bit_flip_injection_split == 0) and (self.bit_flip_injection_chidx == 0) and (self.bit_flip_injection_featidx == 0):
+            with nogil:
+                for i in range(n_samples):
+                    node = self.nodes
+
+                    for k in range(X_indptr[i], X_indptr[i + 1]):
+                        feature_to_sample[X_indices[k]] = i
+                        X_sample[X_indices[k]] = X_data[k]
+
+                    # While node not a leaf
+                    while node.left_child != _TREE_LEAF:
+                        # ... and node.right_child != _TREE_LEAF:
+                        if feature_to_sample[node.feature] == i:
+                            feature_value = X_sample[node.feature]
+
+                        else:
+                            feature_value = 0.
+
+                        if feature_value <= node.threshold:
+                            node = &self.nodes[node.left_child]
+                        else:
+                            node = &self.nodes[node.right_child]
+
+                    out_ptr[i] = <SIZE_t>(node - self.nodes)  # node offset
+        else:
             for i in range(n_samples):
                 node = self.nodes
+
+                # BFI into threshold
+                if (self.bit_flip_injection_split == 1):
+                    threshold_f1 = node.threshold
+                    threshold_f1 = bfi_float(threshold_f1, self.bit_error_rate_split)
+                else:
+                    threshold_f1 = node.threshold
 
                 for k in range(X_indptr[i], X_indptr[i + 1]):
                     feature_to_sample[X_indices[k]] = i
@@ -1059,7 +1097,7 @@ cdef class Tree:
                     else:
                         feature_value = 0.
 
-                    if feature_value <= node.threshold:
+                    if feature_value <= threshold_f1:
                         node = &self.nodes[node.left_child]
                     else:
                         node = &self.nodes[node.right_child]
@@ -1107,25 +1145,40 @@ cdef class Tree:
         cdef Node* node = NULL
         cdef SIZE_t i = 0
 
-        with nogil:
-            for i in range(n_samples):
-                node = self.nodes
-                indptr_ptr[i + 1] = indptr_ptr[i]
+        # threshold faulty for bit flip injection
+        cdef DTYPE_t threshold_f_dp
+        cdef UINT64_t l_child_f_dp;
+        cdef UINT64_t r_child_f_dp;
+        cdef SIZE_t error_in_child_dp = 0
+        cdef SIZE_t feature_idx_f_dp = 0
 
-                # Add all external nodes
-                while node.left_child != _TREE_LEAF:
-                    # ... and node.right_child != _TREE_LEAF:
-                    indices_ptr[indptr_ptr[i + 1]] = <SIZE_t>(node - self.nodes)
-                    indptr_ptr[i + 1] += 1
+        # with nogil:
+        for i in range(n_samples):
+            node = self.nodes
+            indptr_ptr[i + 1] = indptr_ptr[i]
 
-                    if X_ndarray[i, node.feature] <= node.threshold:
-                        node = &self.nodes[node.left_child]
-                    else:
-                        node = &self.nodes[node.right_child]
-
-                # Add the leave node
+            # Add all external nodes
+            while node.left_child != _TREE_LEAF:
+                # ... and node.right_child != _TREE_LEAF:
                 indices_ptr[indptr_ptr[i + 1]] = <SIZE_t>(node - self.nodes)
                 indptr_ptr[i + 1] += 1
+
+                # threshold bit flip injection
+                if (self.bit_flip_injection_split == 1):
+                    threshold_f_dp = node.threshold
+                    threshold_f_dp = bfi_float(threshold_f_dp, self.bit_error_rate_split)
+                    # print("INJ IN PATH")
+                else:
+                    threshold_f_dp = node.threshold
+
+                if X_ndarray[i, node.feature] <= threshold_f_dp:
+                    node = &self.nodes[node.left_child]
+                else:
+                    node = &self.nodes[node.right_child]
+
+            # Add the leave node
+            indices_ptr[indptr_ptr[i + 1]] = <SIZE_t>(node - self.nodes)
+            indptr_ptr[i + 1] += 1
 
         indices = indices[:indptr[n_samples]]
         cdef np.ndarray[SIZE_t] data = np.ones(shape=len(indices),
