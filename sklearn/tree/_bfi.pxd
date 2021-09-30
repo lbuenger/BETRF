@@ -30,5 +30,7 @@ ctypedef np.npy_uint64 UINT64_t          # Unsigned 64 bit integer
 
 # bit flip injection into floating point value (32 bit)
 cdef DTYPE_t bfi_float (DTYPE_t x, DTYPE_t ber)
+# bit flip injection into floating point value (32 bit) and whether a bf occured
+cdef DTYPE_t bfi_float_bf_occured (DTYPE_t x, DTYPE_t ber, SIZE_t* bf_occured)
 # bit flip injection into integer value
 cdef SIZE_t bfi_intp (SIZE_t x, DTYPE_t ber, SIZE_t bits)

@@ -12,7 +12,7 @@ import os
 
 from Utils import create_exp_folder, store_exp_data_dict, store_exp_data_write, bit_error_rates_generator
 from loadData import readFileMNIST
-from pathEvals import tree_nrOfCorrectPredictionsDespiteWrongPath
+from pathEvals import tree_nrOfCorrectPredictionsDespiteWrongPath, tree_nrOfChangedPathsWithOneBF
 
 def main():
     ### Preparations and configs
@@ -52,14 +52,14 @@ def main():
     reps = 5 # how many times to evaluate for one bit error rate
     # p2exp = 6 # error rates for evaluation start at 2^(-p2exp)
     # bers = bit_error_rates_generator(p2exp)
-    bers = [0.01]
+    bers = [0.0001, 0.001, 0.01, 0.1, 0.25]
     all_data = []
 
     # call evaluation function
-    exp_data_cpdwp = tree_nrOfCorrectPredictionsDespiteWrongPath(X_train, y_train, X_test, y_test, depths, estims, bers, exp_path)
+    # exp_data_results = tree_nrOfCorrectPredictionsDespiteWrongPath(X_train, y_train, X_test, y_test, depths, estims, bers, exp_path, dataset)
+    exp_data_results = tree_nrOfChangedPathsWithOneBF(X_train, y_train, X_test, y_test, depths, estims, bers, exp_path, dataset)
 
-
-    to_dump_data = exp_data_cpdwp
+    to_dump_data = exp_data_results
     to_dump_path = exp_path + "/results.txt"
     store_exp_data_write(to_dump_path, to_dump_data)
 

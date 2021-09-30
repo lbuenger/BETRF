@@ -43,6 +43,7 @@ from ._utils cimport safe_realloc
 from ._utils cimport sizet_ptr_to_ndarray
 
 from ._bfi cimport bfi_float
+from ._bfi cimport bfi_float_bf_occured
 from ._bfi cimport bfi_intp
 
 cdef extern from "numpy/arrayobject.h":
@@ -632,6 +633,7 @@ cdef class Tree:
         self.bit_flip_injection_split = 0
         self.bit_flip_injection_chidx = 0
         self.bit_flip_injection_featidx = 0
+        self.bf_occured_split = 0
         self.bit_error_rate_split = 0.0
         self.bit_error_rate_chidx = 0.0
         self.bit_error_rate_featidx = 0.0
@@ -1151,6 +1153,8 @@ cdef class Tree:
         cdef UINT64_t r_child_f_dp;
         cdef SIZE_t error_in_child_dp = 0
         cdef SIZE_t feature_idx_f_dp = 0
+        cdef SIZE_t bf_occured_split_dp = 0
+        cdef SIZE_t* PT_bf_occured_split_dp = &bf_occured_split_dp
 
         # with nogil:
         for i in range(n_samples):
@@ -1166,7 +1170,8 @@ cdef class Tree:
                 # threshold bit flip injection
                 if (self.bit_flip_injection_split == 1):
                     threshold_f_dp = node.threshold
-                    threshold_f_dp = bfi_float(threshold_f_dp, self.bit_error_rate_split)
+                    threshold_f_dp = bfi_float_bf_occured(threshold_f_dp, self.bit_error_rate_split, PT_bf_occured_split_dp)
+                    self.bf_occured_split = bf_occured_split_dp
                     # print("INJ IN PATH")
                 else:
                     threshold_f_dp = node.threshold

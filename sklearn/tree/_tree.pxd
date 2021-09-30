@@ -57,6 +57,7 @@ cdef class Tree:
     cdef public SIZE_t bit_flip_injection_split       # 1: bit flip injection, 0: no bit flip injection
     cdef public SIZE_t bit_flip_injection_chidx       # 1: bit flip injection, 0: no bit flip injection
     cdef public SIZE_t bit_flip_injection_featidx       # 1: bit flip injection, 0: no bit flip injection
+    cdef public SIZE_t bf_occured_split       # 1: at least one bit flip occured in a split
     cdef public DTYPE_t bit_error_rate_split          # bit error rate for bit flip injection, defined as a probability of flip per bit
     cdef public DTYPE_t bit_error_rate_chidx          # bit error rate for bit flip injection, defined as a probability of flip per bit
     cdef public DTYPE_t bit_error_rate_featidx          # bit error rate for bit flip injection, defined as a probability of flip per bit
