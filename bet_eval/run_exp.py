@@ -44,12 +44,12 @@ def main():
     exp_data.close()
 
     # DT/RF configs
-    depths = [5] # DT/RF depths
+    depths = [5,10] # DT/RF depths
     estims = [1] # number of DTs in RF
     split_inj = 0 # activate split value injection
     feature_idx_inj = 0 # activate feature idx injection
     child_idx_inj = 0 # activate child idx injection
-    reps = 5 # how many times to evaluate for one bit error rate
+    reps = 2 # how many times to evaluate for one bit error rate
     # p2exp = 6 # error rates for evaluation start at 2^(-p2exp)
     # bers = bit_error_rates_generator(p2exp)
     bers = [0.0001, 0.001, 0.01, 0.1, 0.25]
@@ -59,7 +59,7 @@ def main():
     # exp_data_results = tree_nrOfCorrectPredictionsDespiteWrongPath(X_train, y_train, X_test, y_test, depths, estims, bers, exp_path, dataset)
     # exp_data_results = tree_nrOfChangedPathsWithOneBF(X_train, y_train, X_test, y_test, depths, estims, bers, exp_path, dataset)
 
-    exp_data_results = tree_PEs_estim(X_train, y_train, X_test, y_test, depths, estims, bers, exp_path, dataset)
+    exp_data_results = tree_PEs_estim(X_train, y_train, X_test, y_test, depths, estims, bers, exp_path, dataset, reps)
 
     to_dump_data = exp_data_results
     to_dump_path = exp_path + "/results.txt"
