@@ -12,7 +12,7 @@ import os
 
 from Utils import create_exp_folder, store_exp_data_dict, store_exp_data_write, bit_error_rates_generator
 from loadData import readFileMNIST
-from pathEvals import tree_nrOfCorrectPredictionsDespiteWrongPath, tree_nrOfChangedPathsWithOneBF
+from pathEvals import tree_nrOfCorrectPredictionsDespiteWrongPath, tree_nrOfChangedPathsWithOneBF, tree_PEs_estim
 
 def main():
     ### Preparations and configs
@@ -57,7 +57,9 @@ def main():
 
     # call evaluation function
     # exp_data_results = tree_nrOfCorrectPredictionsDespiteWrongPath(X_train, y_train, X_test, y_test, depths, estims, bers, exp_path, dataset)
-    exp_data_results = tree_nrOfChangedPathsWithOneBF(X_train, y_train, X_test, y_test, depths, estims, bers, exp_path, dataset)
+    # exp_data_results = tree_nrOfChangedPathsWithOneBF(X_train, y_train, X_test, y_test, depths, estims, bers, exp_path, dataset)
+
+    exp_data_results = tree_PEs_estim(X_train, y_train, X_test, y_test, depths, estims, bers, exp_path, dataset)
 
     to_dump_data = exp_data_results
     to_dump_path = exp_path + "/results.txt"

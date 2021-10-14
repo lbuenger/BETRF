@@ -64,6 +64,10 @@ cdef class Tree:
     cdef public SIZE_t nr_child_idx       # number of bits in child indices in tree
     cdef public SIZE_t nr_feature_idx       # number of bits in feature indices
     cdef public SIZE_t aborted       # 1: aborted, 0: not aborted (in case of access violations due to array-index out of bounds)
+    cdef public SIZE_t nr_nodes_visited       # nr of nodes visited in last run of tree
+    cdef public SIZE_t nr_nodes_visited_with_errors       # nr of nodes with errors from the ones visited
+    cdef public SIZE_t nr_nodes_visited_not_changing_path_despite_biterror       # nr of nodes with errors from the ones visited
+
 
     # Methods
     cdef SIZE_t _add_node(self, SIZE_t parent, bint is_left, bint is_leaf,

@@ -640,6 +640,9 @@ cdef class Tree:
         self.nr_child_idx = 0
         self.nr_feature_idx = 0
         self.aborted = 0
+        self.nr_nodes_visited = 0
+        self.nr_nodes_visited_with_errors = 0
+        self.nr_nodes_visited_not_changing_path_despite_biterror = 0
 
     def __dealloc__(self):
         """Destructor."""
@@ -1156,6 +1159,11 @@ cdef class Tree:
         cdef SIZE_t bf_occured_split_dp = 0
         cdef SIZE_t* PT_bf_occured_split_dp = &bf_occured_split_dp
 
+        # reset nr of nodes visited
+        self.nr_nodes_visited = 0
+        self.nr_nodes_visited_with_errors = 0
+        self.nr_nodes_visited_not_changing_path_despite_biterror = 0
+
         # with nogil:
         for i in range(n_samples):
             node = self.nodes
@@ -1172,6 +1180,13 @@ cdef class Tree:
                     threshold_f_dp = node.threshold
                     threshold_f_dp = bfi_float_bf_occured(threshold_f_dp, self.bit_error_rate_split, PT_bf_occured_split_dp)
                     self.bf_occured_split = bf_occured_split_dp
+
+                    if (bf_occured_split_dp == 1):
+                      self.nr_nodes_visited_with_errors += 1
+                      # check whether node with error did not change the path
+                      if (X_ndarray[i, node.feature] <= threshold_f_dp) != (X_ndarray[i, node.feature] <= node.threshold):
+                        self.nr_nodes_visited_not_changing_path_despite_biterror += 1
+
                     # print("INJ IN PATH")
                 else:
                     threshold_f_dp = node.threshold
@@ -1180,6 +1195,7 @@ cdef class Tree:
                     node = &self.nodes[node.left_child]
                 else:
                     node = &self.nodes[node.right_child]
+                self.nr_nodes_visited += 1
 
             # Add the leave node
             indices_ptr[indptr_ptr[i + 1]] = <SIZE_t>(node - self.nodes)
