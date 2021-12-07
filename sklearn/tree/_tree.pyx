@@ -633,12 +633,16 @@ cdef class Tree:
         self.bit_flip_injection_split = 0
         self.bit_flip_injection_chidx = 0
         self.bit_flip_injection_featidx = 0
+        self.bit_flip_injection_featval = 0
         self.bf_occured_split = 0
+        self.bit_flip_injection_featval_floatInt = 0
         self.bit_error_rate_split = 0.0
         self.bit_error_rate_chidx = 0.0
         self.bit_error_rate_featidx = 0.0
+        self.bit_error_rate_featval = 0.0
         self.nr_child_idx = 0
         self.nr_feature_idx = 0
+        self.nr_feature_val = 0
         self.aborted = 0
         self.nr_nodes_visited = 0
         self.nr_nodes_visited_with_errors = 0
@@ -846,14 +850,16 @@ cdef class Tree:
         cdef SIZE_t i = 0
         # threshold faulty for bit flip injection
         cdef DTYPE_t threshold_f
-        cdef UINT64_t l_child_f;
-        cdef UINT64_t r_child_f;
+        cdef DTYPE_t feature_f
+        cdef UINT64_t feature_f_intp
+        cdef UINT64_t l_child_f
+        cdef UINT64_t r_child_f
         cdef SIZE_t error_in_child = 0
         cdef SIZE_t feature_idx_f = 0
         #cdef SIZE_t level_d = 0
         #cdef float margin = 0
 
-        if (self.bit_flip_injection_split == 0) and (self.bit_flip_injection_chidx == 0) and (self.bit_flip_injection_featidx == 0):
+        if (self.bit_flip_injection_split == 0) and (self.bit_flip_injection_chidx == 0) and (self.bit_flip_injection_featidx == 0) and (self.bit_flip_injection_featval == 0):
             #print("NO BFI _apply_dense")
             with nogil:
                 for i in range(n_samples):
@@ -924,8 +930,29 @@ cdef class Tree:
                     else:
                         threshold_f = node.threshold
 
+                    # BFI into feature value
+                    if (self.bit_flip_injection_featval == 1):
+                        # print("featval injection works")
+                        if (self.bit_flip_injection_featval_floatInt != 0):
+                            # int injection (TODO)
+                            # print("feature float", X_ndarray[i, feature_idx_f])
+                            feature_f_intp = int(round(X_ndarray[i, feature_idx_f]))
+                            # print("feature int", feature_f_intp)
+                            feature_f_intp = bfi_intp(feature_f_intp, self.bit_error_rate_featval, self.nr_feature_val)
+                            # print("feature inj int", feature_f_intp)
+                            feature_f = float(feature_f_intp)
+                            # print("feature inj float", feature_f)
+                            # print("---")
+                        else:
+                            # float injection
+                            feature_f = X_ndarray[i, feature_idx_f]
+                            # print("feature", feature_f)
+                            feature_f = bfi_float(feature_f, self.bit_error_rate_featval)
+                    else:
+                        feature_f = X_ndarray[i, feature_idx_f]
+
                     # do comparison
-                    if X_ndarray[i, feature_idx_f] <= threshold_f:
+                    if feature_f <= threshold_f:
                         node = &self.nodes[node.left_child]
                         # using faulty child can cause segmentation faults, don't try
                         # node = &self.nodes[l_child_f]
