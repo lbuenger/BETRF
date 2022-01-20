@@ -647,6 +647,10 @@ cdef class Tree:
         self.nr_nodes_visited = 0
         self.nr_nodes_visited_with_errors = 0
         self.nr_nodes_visited_not_changing_path_despite_biterror = 0
+        self.int_rounding_for_thresholds = 0
+        self.featurevals = []
+        self.splitvals = []
+        # self.npsplitvals = np.zeros(1, dtype=np.intp)
 
     def __dealloc__(self):
         """Destructor."""
@@ -845,6 +849,9 @@ cdef class Tree:
         cdef np.ndarray[SIZE_t] out = np.zeros((n_samples,), dtype=np.intp)
         cdef SIZE_t* out_ptr = <SIZE_t*> out.data
 
+
+        # cdef SIZE_t* nppsplitvals = <SIZE_t*> out.data
+
         # Initialize auxiliary data-structure
         cdef Node* node = NULL
         cdef SIZE_t i = 0
@@ -861,25 +868,46 @@ cdef class Tree:
 
         if (self.bit_flip_injection_split == 0) and (self.bit_flip_injection_chidx == 0) and (self.bit_flip_injection_featidx == 0) and (self.bit_flip_injection_featval == 0):
             #print("NO BFI _apply_dense")
-            with nogil:
-                for i in range(n_samples):
-                    node = self.nodes
-                    # While node not a leaf
-                    #level_d = 0
-                    while node.left_child != _TREE_LEAF:
-                        # ... and node.right_child != _TREE_LEAF:
-                        # if X_ndarray[i, node.feature] <= node.threshold:
-                        #   margin = node.threshold - X_ndarray[i, node.feature]
-                        # else:
-                        #   margin = X_ndarray[i, node.feature] - node.threshold
-                        #printf("Sample: %d, level %d, margin: %.2f\n", i, level_d, margin)
+            # with nogil:
+            for i in range(n_samples):
+                node = self.nodes
+                # While node not a leaf
+                #level_d = 0
+                while node.left_child != _TREE_LEAF:
+                    # ... and node.right_child != _TREE_LEAF:
+                    # if X_ndarray[i, node.feature] <= node.threshold:
+                    #   margin = node.threshold - X_ndarray[i, node.feature]
+                    # else:
+                    #   margin = X_ndarray[i, node.feature] - node.threshold
+                    #printf("Sample: %d, level %d, margin: %.2f\n", i, level_d, margin)
 
+                    # print threshold and feature here
+                    # print("{} <= {}".format(X_ndarray[i, node.feature], node.threshold))
+                    # print("{} <= {}".format(X_ndarray[i, node.feature], round(node.threshold)))
+
+                    # use original thresholds (without rounding)
+                    if self.int_rounding_for_thresholds == 0:
+                        # print("no rounding")
+                        # append threshold and feature value to lists
+                        self.featurevals.append(X_ndarray[i, node.feature])
+                        self.splitvals.append(node.threshold)
+                        # np.append(self.npsplitvals, int(node.threshold))
                         if X_ndarray[i, node.feature] <= node.threshold:
                             node = &self.nodes[node.left_child]
                         else:
                             node = &self.nodes[node.right_child]
-                        #level_d += 1
-                    out_ptr[i] = <SIZE_t>(node - self.nodes)  # node offset
+                    # use rounded thresholds
+                    else:
+                        # print("use rounding")
+                        self.featurevals.append(X_ndarray[i, node.feature])
+                        self.splitvals.append(round(node.threshold))
+                        # print(self.splitvals)
+                        if X_ndarray[i, node.feature] <= round(node.threshold):
+                            node = &self.nodes[node.left_child]
+                        else:
+                            node = &self.nodes[node.right_child]
+                    #level_d += 1
+                out_ptr[i] = <SIZE_t>(node - self.nodes)  # node offset
         else:
             #print("BFI _apply_dense")
             for i in range(n_samples):

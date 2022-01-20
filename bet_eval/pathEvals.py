@@ -4,6 +4,9 @@ from sklearn.ensemble import RandomForestClassifier
 import numpy as np
 from sklearn.metrics import accuracy_score, precision_score, recall_score, precision_recall_curve, average_precision_score
 
+from pe2_th import BFvals
+from pe2_th import tree_pe2
+
 def tree_nrOfCorrectPredictionsDespiteWrongPath(X_train, y_train, X_test, y_test, depths, estims, bers, exp_path, dataset, print_trace=None):
     experiment_data = []
     for dep in depths:
@@ -280,4 +283,73 @@ def tree_PEs_estim(X_train, y_train, X_test, y_test, depths, estims, bers, exp_p
                         "ratio_node_w_error_and_correct_split_by_visited_nodes": ratio_node_w_error_and_correct_split_by_visited_nodes / counter_inputs
                     }
                 )
+    return experiment_data
+
+def tree_bounds(X_train, y_train, X_test, y_test, depths, estims, bers, exp_path, dataset, reps, print_trace=None):
+    experiment_data = []
+    for dep in depths:
+        # create and train classifier
+        tree = DecisionTreeClassifier(max_depth=dep)
+        tree = tree.fit(X_train, y_train)
+        # lists for storing all path data
+        featurevals_arrays = []
+        splitvals_arrays = []
+        # iterate over single samples, since we need to trace pathes
+        for feature in X_test:
+            if print_trace is not None:
+                print("---new input---")
+            in1 = feature
+            # reshape because we use only one input sample
+            in1 = in1.reshape(1, -1)
+
+            ### predict without errors
+            tree.tree_.bit_flip_injection_split = 0
+            ### activate rounding of thresholds to nearest int
+            tree.tree_.int_rounding_for_thresholds = 1
+            path_correct = tree.predict(in1, check_input=True)
+            if print_trace is not None:
+                print("prediction", path_correct)
+
+            # if print_trace is not None:
+                # print("data: ", tree.tree_.npsplitvals)
+                # print("data1: ", tree.tree_.splitvals)
+                # print("data2: ", tree.tree_.featurevals)
+
+            # store split and feature values in nodes visitied
+            splitvals_arrays.append(tree.tree_.splitvals)
+            featurevals_arrays.append(tree.tree_.featurevals)
+
+            # flush buffers for split and feature values
+            tree.tree_.splitvals = []
+            tree.tree_.featurevals = []
+
+            if print_trace is not None:
+                print("------")
+        if print_trace is not None:
+            print("---END---")
+
+
+        tree_pe2(splitvals_arrays, featurevals_arrays, bers, dep)
+
+        pe2_tree = 0
+        experiment_data.append(
+            {
+                "model": "tree",
+                "dataset": dataset,
+                "depth": dep,
+                "pe2_tree": pe2_tree
+            }
+        )
+        # get accuracy of tree, no quantization
+        tree.tree_.int_rounding_for_thresholds = 0
+        out = tree.predict(X_test)
+        accuracy = accuracy_score(y_test, out)
+        print("Original accuracy", accuracy)
+
+        # get accuracy without quantization
+        tree.tree_.int_rounding_for_thresholds = 1
+        out = tree.predict(X_test)
+        accuracy = accuracy_score(y_test, out)
+        print("Quantized accuracy", accuracy)
+
     return experiment_data
