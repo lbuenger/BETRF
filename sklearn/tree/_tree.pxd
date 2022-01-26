@@ -73,6 +73,7 @@ cdef class Tree:
     cdef public SIZE_t nr_nodes_visited_with_errors       # nr of nodes with errors from the ones visited
     cdef public SIZE_t nr_nodes_visited_not_changing_path_despite_biterror       # nr of nodes with errors from the ones visited
     cdef public SIZE_t int_rounding_for_thresholds       # 1: rounds thresholds to nearest integer, 0: no rounding
+    cdef public SIZE_t int_threshold_bits       # 1: rounds thresholds to nearest integer, 0: no rounding
     cdef public list featurevals
     cdef public list splitvals
     # cdef SIZE_t* npsplitvals

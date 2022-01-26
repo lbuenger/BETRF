@@ -648,6 +648,7 @@ cdef class Tree:
         self.nr_nodes_visited_with_errors = 0
         self.nr_nodes_visited_not_changing_path_despite_biterror = 0
         self.int_rounding_for_thresholds = 0
+        self.int_threshold_bits = 0
         self.featurevals = []
         self.splitvals = []
         # self.npsplitvals = np.zeros(1, dtype=np.intp)
@@ -965,7 +966,7 @@ cdef class Tree:
                         # integer threshold
                         if (self.bit_flip_injection_split == 1):
                             threshold_f_int = int(round(node.threshold))
-                            threshold_f_int = bfi_intp(threshold_f_int, self.bit_error_rate_split, 8)
+                            threshold_f_int = bfi_intp(threshold_f_int, self.bit_error_rate_split, self.int_threshold_bits)
                         else:
                             threshold_f_int = round(node.threshold)
 
