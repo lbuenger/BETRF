@@ -14,18 +14,24 @@ from Utils import create_exp_folder, store_exp_data_dict, store_exp_data_write, 
 from loadData import readFileMNIST
 from pathEvals import tree_nrOfCorrectPredictionsDespiteWrongPath, tree_nrOfChangedPathsWithOneBF, tree_PEs_estim, tree_bounds
 
+from sklearn.datasets import load_iris
+from sklearn.model_selection import train_test_split
+import joblib
+
 def main():
     ### Preparations and configs
     # paths to train and test
     this_path = os.getcwd()
 
     # command line arguments, use argparse here later
-    dataset = "MNIST"
+    # dataset = "MNIST"
+    dataset = "IRIS"
 
     # read data
     train_path = ""
     test_path = ""
     X_train, y_train, X_test, y_test = None, None, None, None
+
     if dataset == "MNIST":
         dataset_train_path = "/mnist/dataset/train.csv"
         dataset_test_path = "/mnist/dataset/test.csv"
@@ -33,6 +39,17 @@ def main():
         test_path = this_path + dataset_test_path
         X_train, y_train = readFileMNIST(train_path)
         X_test, y_test = readFileMNIST(test_path)
+
+    if dataset == "IRIS":
+        dataset_train_path = "sklearn import"
+        dataset_test_path = "sklearn import"
+        train_path = this_path + dataset_train_path
+        test_path = this_path + dataset_test_path
+        iris = load_iris()
+        X, y = iris.data, iris.target
+        X *= 10
+        X = X.astype(np.uint8)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33, random_state=42)
 
     # create experiment folder and return the path to it
     exp_path = create_exp_folder(this_path)

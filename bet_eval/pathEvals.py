@@ -7,6 +7,8 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, preci
 from pe2_th import BFvals
 from pe2_th import tree_pe2
 
+import joblib
+
 def tree_nrOfCorrectPredictionsDespiteWrongPath(X_train, y_train, X_test, y_test, depths, estims, bers, exp_path, dataset, print_trace=None):
     experiment_data = []
     for dep in depths:
@@ -289,8 +291,10 @@ def tree_bounds(X_train, y_train, X_test, y_test, depths, estims, bers, exp_path
     experiment_data = []
     for dep in depths:
         # create and train classifier
-        tree = DecisionTreeClassifier(max_depth=dep)
-        tree = tree.fit(X_train, y_train)
+        # tree = DecisionTreeClassifier(max_depth=dep)
+        # tree = tree.fit(X_train, y_train)
+        # load tree
+        tree = joblib.load('DT_iris.pkl')
         # lists for storing all path data
         featurevals_arrays = []
         splitvals_arrays = []
@@ -301,7 +305,7 @@ def tree_bounds(X_train, y_train, X_test, y_test, depths, estims, bers, exp_path
             in1 = feature
             # reshape because we use only one input sample
             in1 = in1.reshape(1, -1)
-            
+
             ### predict without errors
             tree.tree_.bit_flip_injection_split = 0
             ### activate rounding of thresholds to nearest int

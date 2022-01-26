@@ -47,7 +47,7 @@ class BFvals:
 
 # 8 bit only for now
 def tree_pe2(splits_list, features_list, bers, dep):
-    nr_bits_split = 8
+    nr_bits_split = 7
     # node data is in form list of lists
     # print("max: ", splits_list)
     # splits_list_np = np.array(splits_list, dtype=np.uint8)

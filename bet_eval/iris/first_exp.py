@@ -11,6 +11,7 @@ from datetime import datetime
 import os
 from sklearn.datasets import load_iris
 from sklearn.model_selection import train_test_split
+import joblib
 # Preparations and configs
 ################################################################################
 # paths to train and test
@@ -165,6 +166,8 @@ def main(argv):
                 # print("Estimators:{}, Depths:{}".format(est, dep))
                 tree = DecisionTreeClassifier(max_depth=dep)
                 tree = tree.fit(X_train, y_train)
+
+                joblib.dump(tree, 'DT_iris.pkl', compress=9)
                 # out = clf.predict(X_train)
                 # print("Accuracy (train)", accuracy_score(y_train, out))
 
