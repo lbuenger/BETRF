@@ -865,6 +865,8 @@ cdef class Tree:
         cdef SIZE_t feature_idx_f = 0
         #cdef SIZE_t level_d = 0
         #cdef float margin = 0
+        cdef SIZE_t feature_f_int
+        cdef SIZE_t threshold_f_int
 
         if (self.bit_flip_injection_split == 0) and (self.bit_flip_injection_chidx == 0) and (self.bit_flip_injection_featidx == 0) and (self.bit_flip_injection_featval == 0):
             #print("NO BFI _apply_dense")
@@ -952,11 +954,20 @@ cdef class Tree:
                         feature_idx_f = node.feature
 
                     # BFI into threshold
-                    if (self.bit_flip_injection_split == 1):
-                        threshold_f = node.threshold
-                        threshold_f = bfi_float(threshold_f, self.bit_error_rate_split)
+                    if self.int_rounding_for_thresholds == 0:
+                        # floating point threshold
+                        if (self.bit_flip_injection_split == 1):
+                            threshold_f = node.threshold
+                            threshold_f = bfi_float(threshold_f, self.bit_error_rate_split)
+                        else:
+                            threshold_f = node.threshold
                     else:
-                        threshold_f = node.threshold
+                        # integer threshold
+                        if (self.bit_flip_injection_split == 1):
+                            threshold_f_int = int(round(node.threshold))
+                            threshold_f_int = bfi_intp(threshold_f_int, self.bit_error_rate_split, 8)
+                        else:
+                            threshold_f_int = round(node.threshold)
 
                     # BFI into feature value
                     if (self.bit_flip_injection_featval == 1):
@@ -979,14 +990,25 @@ cdef class Tree:
                     else:
                         feature_f = X_ndarray[i, feature_idx_f]
 
-                    # do comparison
-                    if feature_f <= threshold_f:
-                        node = &self.nodes[node.left_child]
-                        # using faulty child can cause segmentation faults, don't try
-                        # node = &self.nodes[l_child_f]
+
+                    if self.int_rounding_for_thresholds == 0:
+                        # do comparison
+                        if feature_f <= threshold_f:
+                            node = &self.nodes[node.left_child]
+                            # using faulty child can cause segmentation faults, don't try
+                            # node = &self.nodes[l_child_f]
+                        else:
+                            node = &self.nodes[node.right_child]
+                            # node = &self.nodes[r_child_f]
                     else:
-                        node = &self.nodes[node.right_child]
-                        # node = &self.nodes[r_child_f]
+                        # do comparison
+                        if feature_f <= threshold_f_int:
+                            node = &self.nodes[node.left_child]
+                            # using faulty child can cause segmentation faults, don't try
+                            # node = &self.nodes[l_child_f]
+                        else:
+                            node = &self.nodes[node.right_child]
+                            # node = &self.nodes[r_child_f]
                     #level_d += 1
                     # No BFI in threshold
                     # else:

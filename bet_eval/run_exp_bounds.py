@@ -44,7 +44,7 @@ def main():
     exp_data.close()
 
     # DT/RF configs
-    depths = [10] # DT/RF depths
+    depths = [5] # DT/RF depths
     estims = [1] # number of DTs in RF
     split_inj = 0 # activate split value injection
     feature_idx_inj = 0 # activate feature idx injection
@@ -53,8 +53,9 @@ def main():
     # p2exp = 6 # error rates for evaluation start at 2^(-p2exp)
     # bers = bit_error_rates_generator(p2exp)
     # bers = [0.0001, 0.001, 0.01, 0.1, 0.25]
-    # bers = [0.0001, 0.001, 0.01, 0.1, 0.25, 0.5, 1]
-    bers = [0.1, 0.25, 0.5, 0.75, 1]
+    bers = [0.0001, 0.001, 0.01, 0.1, 0.25, 0.5, 1]
+    # bers = [0.1, 0.25, 0.5, 0.75, 1]
+    # bers = [0.25]
     all_data = []
 
     # call evaluation function

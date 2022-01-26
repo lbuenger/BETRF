@@ -56,7 +56,7 @@ def tree_pe2(splits_list, features_list, bers, dep):
     p_Sqs_for_all_paths = []
 
     counter = 0
-    max_samples = 200
+    max_samples = 10000
     # iterate over paths
     for ber in bers:
         p_Sqs_for_all_paths = []
@@ -64,6 +64,7 @@ def tree_pe2(splits_list, features_list, bers, dep):
         for (split_path, feature_path) in zip(splits_list, features_list):
             if counter < max_samples:
                 counter += 1
+                # print(counter)
                 p_Sqs_for_one_path = []
                 # iterate over split and feature values in one path
                 for (split, feature) in zip(split_path, feature_path):
@@ -98,6 +99,7 @@ def tree_pe2(splits_list, features_list, bers, dep):
                         mistakes_div_cases = comp_wrong_cases / comp_total_cases
                         p_Sq += (p_b * mistakes_div_cases)
                         # print("mistakes/cases", mistakes_div_cases)
+                        # print("---")
                     # done with a node, append to path buffer
                     p_Sqs_for_one_path.append(p_Sq)
                     # print(p_Sqs_for_one_path)

@@ -301,7 +301,7 @@ def tree_bounds(X_train, y_train, X_test, y_test, depths, estims, bers, exp_path
             in1 = feature
             # reshape because we use only one input sample
             in1 = in1.reshape(1, -1)
-
+            
             ### predict without errors
             tree.tree_.bit_flip_injection_split = 0
             ### activate rounding of thresholds to nearest int
