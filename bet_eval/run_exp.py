@@ -1,5 +1,7 @@
+# libary imports
 import csv,operator,sys,os
 from sklearn.datasets import load_iris
+from sklearn.model_selection import train_test_split
 from sklearn import tree
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier
@@ -9,10 +11,13 @@ import matplotlib.pyplot as plt
 from pandas.core.common import flatten
 from datetime import datetime
 import os
+import joblib
 
+# own file imports
 from Utils import create_exp_folder, store_exp_data_dict, store_exp_data_write, bit_error_rates_generator
 from loadData import readFileMNIST
 from pathEvals import tree_nrOfCorrectPredictionsDespiteWrongPath, tree_nrOfChangedPathsWithOneBF, tree_PEs_estim
+from bfi_evaluation import bfi_tree
 
 def main():
     ### Preparations and configs
@@ -20,12 +25,13 @@ def main():
     this_path = os.getcwd()
 
     # command line arguments, use argparse here later
-    dataset = "MNIST"
+    dataset = "IRIS"
 
     # read data
     train_path = ""
     test_path = ""
     X_train, y_train, X_test, y_test = None, None, None, None
+
     if dataset == "MNIST":
         dataset_train_path = "/mnist/dataset/train.csv"
         dataset_test_path = "/mnist/dataset/test.csv"
@@ -33,6 +39,17 @@ def main():
         test_path = this_path + dataset_test_path
         X_train, y_train = readFileMNIST(train_path)
         X_test, y_test = readFileMNIST(test_path)
+
+    if dataset == "IRIS":
+        dataset_train_path = "sklearn import"
+        dataset_test_path = "sklearn import"
+        train_path = this_path + dataset_train_path
+        test_path = this_path + dataset_test_path
+        iris = load_iris()
+        X, y = iris.data, iris.target
+        X *= 10
+        X = X.astype(np.uint8)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33, random_state=42)
 
     # create experiment folder and return the path to it
     exp_path = create_exp_folder(this_path)
@@ -44,22 +61,59 @@ def main():
     exp_data.close()
 
     # DT/RF configs
-    depths = [5,10] # DT/RF depths
-    estims = [1] # number of DTs in RF
-    split_inj = 0 # activate split value injection
-    feature_idx_inj = 0 # activate feature idx injection
-    child_idx_inj = 0 # activate child idx injection
-    reps = 2 # how many times to evaluate for one bit error rate
+    DT_RF = "DT" # DT or RF
+    depth = 10 # DT/RF depths
+    estims = 1 # number of DTs in RF (does not matter for DT)
+    split_inj = 1 # activate split value injection with 1
+    feature_inj = 0 # activate feature value injection with 1
+    nr_bits_split = 7 # nr of bits in split value
+    int_split = 1 # whether to use integer split
+    nr_bits_feature = 8 # nr of bits in feature value
+    feature_inj = 0 # activate feature value injection with 1
+    feature_idx_inj = 0 # activate feature idx injection with 1
+    child_idx_inj = 0 # activate child idx injection with 1
+    reps = 10000 # how many times to evaluate for one bit error rate
     # p2exp = 6 # error rates for evaluation start at 2^(-p2exp)
     # bers = bit_error_rates_generator(p2exp)
-    bers = [0.0001, 0.001, 0.01, 0.1, 0.25]
+    # bers = [0.0001, 0.001, 0.01, 0.1, 0.25]
+    bers = [0.0001, 0.001, 0.01, 0.1, 0.25, 0.5, 1]
+    # bers = [0.5]
     all_data = []
+
+    # train or load tree / forest
+    # tree = DecisionTreeClassifier(max_depth=dep)
+    # tree = tree.fit(X_train, y_train)
+    model = joblib.load('DT_iris.pkl')
+
+    # dictionary for experiment data
+    expdata_dict = {
+        "DT_RF": DT_RF,
+        "model": model,
+        "depth": depth,
+        "estims": estims,
+        "dataset_name": dataset,
+        "X_train": X_train,
+        "X_test": X_test,
+        "y_train": y_train,
+        "y_test": y_test,
+        "experiment_path": exp_path,
+        "split_inj": split_inj,
+        "int_split": int_split,
+        "feature_inj": feature_inj,
+        "nr_bits_split": nr_bits_split,
+        "nr_bits_feature": nr_bits_feature,
+        "feature_idx_inj": feature_idx_inj,
+        "child_idx_inj": child_idx_inj,
+        "reps": reps,
+        "bers": bers,
+        }
 
     # call evaluation function
     # exp_data_results = tree_nrOfCorrectPredictionsDespiteWrongPath(X_train, y_train, X_test, y_test, depths, estims, bers, exp_path, dataset)
     # exp_data_results = tree_nrOfChangedPathsWithOneBF(X_train, y_train, X_test, y_test, depths, estims, bers, exp_path, dataset)
 
-    exp_data_results = tree_PEs_estim(X_train, y_train, X_test, y_test, depths, estims, bers, exp_path, dataset, reps)
+    # exp_data_results = tree_PEs_estim(X_train, y_train, X_test, y_test, depths, estims, bers, exp_path, dataset, reps)
+    exp_data_results = bfi_tree(expdata_dict)
 
     to_dump_data = exp_data_results
     to_dump_path = exp_path + "/results.txt"

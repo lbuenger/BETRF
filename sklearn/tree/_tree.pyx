@@ -965,10 +965,10 @@ cdef class Tree:
                     else:
                         # integer threshold
                         if (self.bit_flip_injection_split == 1):
-                            threshold_f_int = int(round(node.threshold))
+                            threshold_f_int = np.floor(node.threshold)
                             threshold_f_int = bfi_intp(threshold_f_int, self.bit_error_rate_split, self.int_threshold_bits)
                         else:
-                            threshold_f_int = round(node.threshold)
+                            threshold_f_int = np.floor(node.threshold)
 
                     # BFI into feature value
                     if (self.bit_flip_injection_featval == 1):
@@ -976,7 +976,7 @@ cdef class Tree:
                         if (self.bit_flip_injection_featval_floatInt != 0):
                             # int injection (TODO)
                             # print("feature float", X_ndarray[i, feature_idx_f])
-                            feature_f_intp = int(round(X_ndarray[i, feature_idx_f]))
+                            feature_f_intp = int(X_ndarray[i, feature_idx_f])
                             # print("feature int", feature_f_intp)
                             feature_f_intp = bfi_intp(feature_f_intp, self.bit_error_rate_featval, self.nr_feature_val)
                             # print("feature inj int", feature_f_intp)
@@ -991,6 +991,7 @@ cdef class Tree:
                     else:
                         feature_f = X_ndarray[i, feature_idx_f]
 
+                    # print("{} <= {} / {} / {}".format(X_ndarray[i, node.feature], node.threshold, threshold_f_int, (X_ndarray[i, node.feature] <= node.threshold) == (X_ndarray[i, node.feature] <= threshold_f_int)))
 
                     if self.int_rounding_for_thresholds == 0:
                         # do comparison
