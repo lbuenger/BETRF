@@ -50,7 +50,6 @@ def get_nr_child_idx(clf):
             #           right=children_right[i]))
     return n_nodes - n_leaves_h
 
-# def bfi_tree(X_train, y_train, X_test, y_test, models, depths, estims, bers, exp_path, dataset, reps):
 def bfi_tree(exp_dict):
 
     print("a", exp_dict["dataset_name"])
@@ -63,6 +62,8 @@ def bfi_tree(exp_dict):
     y_test = exp_dict["y_test"]
     reps = exp_dict["reps"]
     bers = exp_dict["bers"]
+    dataset_name = exp_dict["dataset_name"]
+    export_accuracy = exp_dict["export_accuracy"]
 
     # split
     split_inj = exp_dict["split_inj"]
@@ -83,9 +84,10 @@ def bfi_tree(exp_dict):
     exp_data.write("--- BER TEST ---\n")
     estims = exp_dict["estims"]
     depth = exp_dict["depth"]
-    exp_data.write("trees: {}, depth: {}\n".format(estims, depth))
+    exp_data.write("trees: {}, depth: {}, reps: {}, dataset: {}\n".format(estims, depth, reps, dataset_name))
     # exp_data.close()
     for ber in bers:
+        exp_data = open(exp_path + "/results.txt", "a")
         # reset configs
         tree.tree_.bit_flip_injection_split = 0
         tree.tree_.bit_flip_injection_featval = 0
@@ -126,6 +128,12 @@ def bfi_tree(exp_dict):
         # print("BER: {:.4f}, Accuracy: {:.4f} ({:.4f},{:.4f})".format(ber, acc_mean, acc_mean - acc_min, acc_max - acc_mean))
         # exp_data = open(exp_path + "/results.txt", "a")
         exp_data.write("{:.8f} {:.4f} {:.4f} {:.4f}\n".format(ber*100, (acc_mean)*100, (acc_max - acc_mean)*100, (acc_mean - acc_min)*100))
+
+        # dump exp data for each error rate
+        if export_accuracy is not None:
+            filename = "ber_{}.npy".format(ber*100)
+            with open(filename, 'wb') as f:
+            	np.save(f, acc_scores_np)
         # exp_data.close()
         # print("{:.8f} {:.4f} {:.4f} {:.4f}\n".format(ber*100, (acc_mean)*100, (acc_max - acc_mean)*100, (acc_mean - acc_min)*100))
-    exp_data.close()
+        exp_data.close()

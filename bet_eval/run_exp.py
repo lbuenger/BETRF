@@ -27,6 +27,27 @@ def main():
     # command line arguments, use argparse here later
     dataset = "IRIS"
 
+    # DT/RF configs
+    DT_RF = "DT" # DT or RF
+    depth = 10 # DT/RF depths
+    estims = 1 # number of DTs in RF (does not matter for DT)
+    split_inj = 1 # activate split value injection with 1
+    feature_inj = 0 # activate feature value injection with 1
+    nr_bits_split = 7 # nr of bits in split value
+    int_split = 1 # whether to use integer split
+    nr_bits_feature = 8 # nr of bits in feature value
+    feature_inj = 0 # activate feature value injection with 1
+    feature_idx_inj = 0 # activate feature idx injection with 1
+    child_idx_inj = 0 # activate child idx injection with 1
+    reps = 10 # how many times to evaluate for one bit error rate
+    # p2exp = 6 # error rates for evaluation start at 2^(-p2exp)
+    # bers = bit_error_rates_generator(p2exp)
+    bers = [0, 0.0001, 0.001, 0.01, 0.1, 0.25, 0.5, 1]
+    export_accuracy = 1 # 1 if accuracy list for a bit error rate should be exported as .npy, else None
+    # bers = [0.5]
+    # bers = []
+    all_data = []
+
     # read data
     train_path = ""
     test_path = ""
@@ -41,8 +62,8 @@ def main():
         X_test, y_test = readFileMNIST(test_path)
 
     if dataset == "IRIS":
-        dataset_train_path = "sklearn import"
-        dataset_test_path = "sklearn import"
+        dataset_train_path = "/sklearn"
+        dataset_test_path = "/sklearn"
         train_path = this_path + dataset_train_path
         test_path = this_path + dataset_test_path
         iris = load_iris()
@@ -60,30 +81,10 @@ def main():
     exp_data.write(test_path+"\n")
     exp_data.close()
 
-    # DT/RF configs
-    DT_RF = "DT" # DT or RF
-    depth = 10 # DT/RF depths
-    estims = 1 # number of DTs in RF (does not matter for DT)
-    split_inj = 1 # activate split value injection with 1
-    feature_inj = 0 # activate feature value injection with 1
-    nr_bits_split = 7 # nr of bits in split value
-    int_split = 1 # whether to use integer split
-    nr_bits_feature = 8 # nr of bits in feature value
-    feature_inj = 0 # activate feature value injection with 1
-    feature_idx_inj = 0 # activate feature idx injection with 1
-    child_idx_inj = 0 # activate child idx injection with 1
-    reps = 10000 # how many times to evaluate for one bit error rate
-    # p2exp = 6 # error rates for evaluation start at 2^(-p2exp)
-    # bers = bit_error_rates_generator(p2exp)
-    # bers = [0.0001, 0.001, 0.01, 0.1, 0.25]
-    bers = [0.0001, 0.001, 0.01, 0.1, 0.25, 0.5, 1]
-    # bers = [0.5]
-    all_data = []
-
     # train or load tree / forest
     # tree = DecisionTreeClassifier(max_depth=dep)
     # tree = tree.fit(X_train, y_train)
-    model = joblib.load('DT_iris.pkl')
+    model = joblib.load('PREL_MODELS/DT_iris.pkl')
 
     # dictionary for experiment data
     expdata_dict = {
@@ -106,13 +107,10 @@ def main():
         "child_idx_inj": child_idx_inj,
         "reps": reps,
         "bers": bers,
+        "export_accuracy": export_accuracy
         }
 
     # call evaluation function
-    # exp_data_results = tree_nrOfCorrectPredictionsDespiteWrongPath(X_train, y_train, X_test, y_test, depths, estims, bers, exp_path, dataset)
-    # exp_data_results = tree_nrOfChangedPathsWithOneBF(X_train, y_train, X_test, y_test, depths, estims, bers, exp_path, dataset)
-
-    # exp_data_results = tree_PEs_estim(X_train, y_train, X_test, y_test, depths, estims, bers, exp_path, dataset, reps)
     exp_data_results = bfi_tree(expdata_dict)
 
     to_dump_data = exp_data_results
