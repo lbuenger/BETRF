@@ -52,7 +52,6 @@ def get_nr_child_idx(clf):
 
 def bfi_tree(exp_dict):
 
-    print("a", exp_dict["dataset_name"])
     # write experiment data to file
     nr_features = exp_dict["X_train"].shape[1]
 
@@ -84,7 +83,7 @@ def bfi_tree(exp_dict):
     exp_data.write("--- BER TEST ---\n")
     estims = exp_dict["estims"]
     depth = exp_dict["depth"]
-    exp_data.write("trees: {}, depth: {}, reps: {}, dataset: {}\n".format(estims, depth, reps, dataset_name))
+    exp_data.write("(Summary) trees: {}, depth: {}, reps: {}, dataset: {}\n".format(estims, depth, reps, dataset_name))
     # exp_data.close()
     for ber in bers:
         exp_data = open(exp_path + "/results.txt", "a")
@@ -101,6 +100,8 @@ def bfi_tree(exp_dict):
             tree.tree_.int_rounding_for_thresholds = int_split
             tree.tree_.int_threshold_bits = nr_bits_split
 
+        # TODO: feature value injection
+
         # feature index injection
         if feature_idx_inj == 1:
             tree.tree_.bit_error_rate_featidx = ber
@@ -109,6 +110,7 @@ def bfi_tree(exp_dict):
 
         # child indices injection
         if child_idx_inj == 1:
+            # TODO: execute once before bet experiments
             nr_ch_idx = get_nr_child_idx(tree)
             nr_ch_idx *= 2
             tree.tree_.nr_child_idx = np.floor(np.log2(nr_ch_idx)) + 1
@@ -137,3 +139,9 @@ def bfi_tree(exp_dict):
         # exp_data.close()
         # print("{:.8f} {:.4f} {:.4f} {:.4f}\n".format(ber*100, (acc_mean)*100, (acc_max - acc_mean)*100, (acc_mean - acc_min)*100))
         exp_data.close()
+
+        # reset configs
+        tree.tree_.bit_flip_injection_split = 0
+        tree.tree_.bit_flip_injection_featval = 0
+        tree.tree_.bit_flip_injection_featidx = 0
+        tree.tree_.bit_flip_injection_chidx = 0

@@ -29,7 +29,7 @@ def main():
 
     # DT/RF configs
     DT_RF = "DT" # DT or RF
-    depth = 10 # DT/RF depths
+    depth = 5 # DT/RF depths
     estims = 1 # number of DTs in RF (does not matter for DT)
     split_inj = 1 # activate split value injection with 1
     feature_inj = 0 # activate feature value injection with 1
@@ -43,9 +43,7 @@ def main():
     # p2exp = 6 # error rates for evaluation start at 2^(-p2exp)
     # bers = bit_error_rates_generator(p2exp)
     bers = [0, 0.0001, 0.001, 0.01, 0.1, 0.25, 0.5, 1]
-    export_accuracy = 1 # 1 if accuracy list for a bit error rate should be exported as .npy, else None
-    # bers = [0.5]
-    # bers = []
+    export_accuracy = None # 1 if accuracy list for a bit error rate should be exported as .npy, else None
     all_data = []
 
     # read data
@@ -72,6 +70,12 @@ def main():
         X = X.astype(np.uint8)
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33, random_state=42)
 
+    # train or load tree / forest
+    clf = DecisionTreeClassifier(max_depth=depth)
+    model = clf.fit(X_train, y_train)
+    joblib.dump(model, "DT{}_{}.pkl".format(depth, dataset), compress=9)
+    # model = joblib.load('PREL_MODELS/DT_iris.pkl')
+
     # create experiment folder and return the path to it
     exp_path = create_exp_folder(this_path)
 
@@ -80,11 +84,6 @@ def main():
     exp_data.write(train_path+"\n")
     exp_data.write(test_path+"\n")
     exp_data.close()
-
-    # train or load tree / forest
-    # tree = DecisionTreeClassifier(max_depth=dep)
-    # tree = tree.fit(X_train, y_train)
-    model = joblib.load('PREL_MODELS/DT_iris.pkl')
 
     # dictionary for experiment data
     expdata_dict = {
@@ -111,11 +110,23 @@ def main():
         }
 
     # call evaluation function
-    exp_data_results = bfi_tree(expdata_dict)
+    bfi_tree(expdata_dict)
 
-    to_dump_data = exp_data_results
+    # dump experiment settings to file, but first remove unserializable elements
+    keys_to_remove = ["model", "X_train", "X_test","y_train","y_test"]
+    for key in keys_to_remove:
+        expdata_dict.pop(key)
+    to_dump_data = expdata_dict
     to_dump_path = exp_path + "/results.txt"
     store_exp_data_write(to_dump_path, to_dump_data)
+
+    # visualize model (for tree)
+    fig = plt.figure(figsize=(25,20))
+    _ = tree.plot_tree(clf,
+                       feature_names=iris.feature_names,
+                       class_names=iris.target_names,
+                       filled=True)
+    fig.savefig("DT{}_{}.png".format(depth, dataset))
 
 if __name__ == '__main__':
     main()
