@@ -33,17 +33,17 @@ def main():
     estims = 1 # number of DTs in RF (does not matter for DT)
     split_inj = 1 # activate split value injection with 1
     feature_inj = 0 # activate feature value injection with 1
-    nr_bits_split = 7 # nr of bits in split value
+    nr_bits_split = None # nr of bits in split value, it is set below when dataset is loaded
     int_split = 1 # whether to use integer split
-    nr_bits_feature = 8 # nr of bits in feature value
+    nr_bits_feature = None # nr of bits in feature value, bit is set below when dataset is loaded
     feature_inj = 0 # activate feature value injection with 1
     feature_idx_inj = 0 # activate feature idx injection with 1
     child_idx_inj = 0 # activate child idx injection with 1
-    reps = 10 # how many times to evaluate for one bit error rate
+    reps = 10000 # how many times to evaluate for one bit error rate
     # p2exp = 6 # error rates for evaluation start at 2^(-p2exp)
     # bers = bit_error_rates_generator(p2exp)
     bers = [0, 0.0001, 0.001, 0.01, 0.1, 0.25, 0.5, 1]
-    export_accuracy = None # 1 if accuracy list for a bit error rate should be exported as .npy, else None
+    export_accuracy = 1 # 1 if accuracy list for a bit error rate should be exported as .npy, else None
     all_data = []
 
     # read data
@@ -52,6 +52,8 @@ def main():
     X_train, y_train, X_test, y_test = None, None, None, None
 
     if dataset == "MNIST":
+        nr_bits_split = 8
+        nr_bits_feature = 8
         dataset_train_path = "/mnist/dataset/train.csv"
         dataset_test_path = "/mnist/dataset/test.csv"
         train_path = this_path + dataset_train_path
@@ -60,6 +62,8 @@ def main():
         X_test, y_test = readFileMNIST(test_path)
 
     if dataset == "IRIS":
+        nr_bits_split = 7
+        nr_bits_feature = 7
         dataset_train_path = "/sklearn"
         dataset_test_path = "/sklearn"
         train_path = this_path + dataset_train_path
@@ -71,10 +75,10 @@ def main():
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33, random_state=42)
 
     # train or load tree / forest
-    clf = DecisionTreeClassifier(max_depth=depth)
-    model = clf.fit(X_train, y_train)
-    joblib.dump(model, "DT{}_{}.pkl".format(depth, dataset), compress=9)
-    # model = joblib.load('PREL_MODELS/DT_iris.pkl')
+    # clf = DecisionTreeClassifier(max_depth=depth)
+    # model = clf.fit(X_train, y_train)
+    # joblib.dump(model, "DT{}_{}.pkl".format(depth, dataset), compress=9)
+    model = joblib.load('PREL_MODELS/IRIS/DT5_IRIS.pkl')
 
     # create experiment folder and return the path to it
     exp_path = create_exp_folder(this_path)
@@ -121,12 +125,12 @@ def main():
     store_exp_data_write(to_dump_path, to_dump_data)
 
     # visualize model (for tree)
-    fig = plt.figure(figsize=(25,20))
-    _ = tree.plot_tree(clf,
-                       feature_names=iris.feature_names,
-                       class_names=iris.target_names,
-                       filled=True)
-    fig.savefig("DT{}_{}.png".format(depth, dataset))
+    # fig = plt.figure(figsize=(25,20))
+    # _ = tree.plot_tree(clf,
+    #                    feature_names=iris.feature_names,
+    #                    class_names=iris.target_names,
+    #                    filled=True)
+    # fig.savefig("DT{}_{}.png".format(depth, dataset))
 
 if __name__ == '__main__':
     main()
