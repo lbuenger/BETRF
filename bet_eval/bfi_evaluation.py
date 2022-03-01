@@ -102,7 +102,12 @@ def bfi_tree(exp_dict):
             tree.tree_.int_rounding_for_thresholds = int_split
             tree.tree_.int_threshold_bits = nr_bits_split
 
-        # TODO: feature value injection
+        # feature value injection
+        if feature_inj == 1:
+            tree.tree_.bit_error_rate_featval = ber
+            tree.tree_.bit_flip_injection_featval = feature_inj
+            # tree.tree_.bit_flip_injection_featval_floatInt = int_featval
+            # tree.tree_.nr_feature_val = int_featval
 
         # feature index injection
         if feature_idx_inj == 1:
@@ -164,3 +169,125 @@ def bfi_tree(exp_dict):
         filename = "acc_over_ber_DT{}_{}_reps_{}.npy".format(exp_dict["depth"], dataset_name, reps)
         with open(filename, 'wb') as f:
         	np.save(f, stacked)
+
+def bfi_forest(exp_dict):
+
+    # write experiment data to file
+    nr_features = exp_dict["X_train"].shape[1]
+
+    # get data from dictionary
+    clf = exp_dict["model"]
+    X_test = exp_dict["X_test"]
+    y_test = exp_dict["y_test"]
+    reps = exp_dict["reps"]
+    bers = exp_dict["bers"]
+    dataset_name = exp_dict["dataset_name"]
+    export_accuracy = exp_dict["export_accuracy"]
+
+    # split
+    split_inj = exp_dict["split_inj"]
+    int_split = exp_dict["int_split"]
+    nr_bits_split = exp_dict["nr_bits_split"]
+
+    # feature
+    feature_inj = exp_dict["feature_inj"]
+    feature_idx_inj = exp_dict["feature_idx_inj"]
+
+    # child
+    child_idx_inj = exp_dict["child_idx_inj"]
+
+    exp_path = exp_dict["experiment_path"]
+    # exp_data = exp_dict["experiment_data"]
+
+    exp_data = open(exp_path + "/results.txt", "a")
+    exp_data.write("--- BER TEST ---\n")
+    estims = exp_dict["estims"]
+    depth = exp_dict["depth"]
+    exp_data.write("(Summary) trees: {}, depth: {}, reps: {}, dataset: {}\n".format(estims, depth, reps, dataset_name))
+    # exp_data.close()
+
+    accuracy_all = []
+    for ber in bers:
+        exp_data = open(exp_path + "/results.txt", "a")
+        for tree in clf.estimators_:
+            # reset configs
+            tree.tree_.bit_flip_injection_split = 0
+            tree.tree_.bit_flip_injection_featval = 0
+            tree.tree_.bit_flip_injection_featidx = 0
+            tree.tree_.bit_flip_injection_chidx = 0
+
+            # split value injection
+            if split_inj == 1:
+                tree.tree_.bit_error_rate_split = ber
+                tree.tree_.bit_flip_injection_split = split_inj
+                tree.tree_.int_rounding_for_thresholds = int_split
+                tree.tree_.int_threshold_bits = nr_bits_split
+
+            # feature value injection
+            if feature_inj == 1:
+                tree.tree_.bit_error_rate_featval = ber
+                tree.tree_.bit_flip_injection_featval = feature_inj
+                # tree.tree_.bit_flip_injection_featval_floatInt = int_featval
+                # tree.tree_.nr_feature_val = int_featval
+
+            # feature index injection
+            if feature_idx_inj == 1:
+                tree.tree_.bit_error_rate_featidx = ber
+                tree.tree_.bit_flip_injection_featidx = 1
+                tree.tree_.nr_feature_idx = np.floor(np.log2(nr_features)) + 1
+
+            # child indices injection
+            if child_idx_inj == 1:
+                # TODO: execute once before bet experiments
+                nr_ch_idx = get_nr_child_idx(tree)
+                nr_ch_idx *= 2
+                tree.tree_.nr_child_idx = np.floor(np.log2(nr_ch_idx)) + 1
+                tree.tree_.bit_error_rate_chidx = ber
+                tree.tree_.bit_flip_injection_chidx = 1
+
+        acc_scores = []
+        for rep in range(reps):
+            out = clf.predict(X_test)
+            acc_scores.append(accuracy_score(y_test, out))
+        acc_scores_np = np.array(acc_scores)
+        # print("ACC scores", acc_scores_np)
+        acc_mean = np.mean(acc_scores_np)
+        # print("means:", acc_mean)
+        acc_min = np.min(acc_scores_np)
+        acc_max = np.max(acc_scores_np)
+        # print("BER: {:.4f}, Accuracy: {:.4f} ({:.4f},{:.4f})".format(ber, acc_mean, acc_mean - acc_min, acc_max - acc_mean))
+        # exp_data = open(exp_path + "/results.txt", "a")
+        exp_data.write("{:.8f} {:.4f} {:.4f} {:.4f}\n".format(ber, (acc_mean), (acc_max - acc_mean), (acc_mean - acc_min)))
+
+        if export_accuracy is not None:
+            accuracy_all.append(acc_scores)
+        # dump exp data for each error rate
+        # if export_accuracy is not None:
+        #     filename = "ber_{}.npy".format(ber*100)
+        #     with open(filename, 'wb') as f:
+        #     	np.save(f, acc_scores_np)
+
+
+        # exp_data.close()
+        # print("{:.8f} {:.4f} {:.4f} {:.4f}\n".format(ber*100, (acc_mean)*100, (acc_max - acc_mean)*100, (acc_mean - acc_min)*100))
+        exp_data.close()
+
+        for tree in clf.estimators_:
+            # reset configs
+            tree.tree_.bit_flip_injection_split = 0
+            tree.tree_.bit_flip_injection_featval = 0
+            tree.tree_.bit_flip_injection_featidx = 0
+            tree.tree_.bit_flip_injection_chidx = 0
+
+    # TODO: export accuracy in a certain format
+    # if export_accuracy is not None:
+    #     dim_1_all = []
+    #     for idx, acc in enumerate(accuracy_all):
+    #         dim_1 = [bers[idx] for x in range(reps)]
+    #         dim_1_all.append(dim_1)
+    #     bers_flattened = np.array(dim_1_all).flatten()
+    #     accuracy_all_flattened = np.array(accuracy_all).flatten()
+    #     stacked = np.stack((bers_flattened, accuracy_all_flattened))
+    #     filename = "acc_over_ber_DT{}_{}_reps_{}.npy".format(exp_dict["depth"], dataset_name, reps)
+    #     with open(filename, 'wb') as f:
+    #     	np.save(f, stacked)

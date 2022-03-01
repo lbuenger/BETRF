@@ -17,7 +17,7 @@ import joblib
 from Utils import create_exp_folder, store_exp_data_dict, store_exp_data_write, bit_error_rates_generator
 from loadData import readFileMNIST
 from pathEvals import tree_nrOfCorrectPredictionsDespiteWrongPath, tree_nrOfChangedPathsWithOneBF, tree_PEs_estim
-from bfi_evaluation import bfi_tree
+from bfi_evaluation import bfi_tree, bfi_forest
 
 def main():
     ### Preparations and configs
@@ -25,21 +25,21 @@ def main():
     this_path = os.getcwd()
 
     # command line arguments, use argparse here later
-    dataset = "IRIS"
+    dataset = "MNIST"
 
     # DT/RF configs
-    DT_RF = "DT" # DT or RF
-    depth = 5 # DT/RF depths
-    estims = 1 # number of DTs in RF (does not matter for DT)
-    split_inj = 1 # activate split value injection with 1
+    DT_RF = "RF" # DT or RF
+    depth = 5 # DT/RF depth (single value for DT, list for RFs)
+    estims = 5 # number of DTs in RF (does not matter for DT)
+    split_inj = 0 # activate split value injection with 1
     feature_inj = 0 # activate feature value injection with 1
     nr_bits_split = None # nr of bits in split value, it is set below when dataset is loaded
-    int_split = 1 # whether to use integer split
-    nr_bits_feature = None # nr of bits in feature value, bit is set below when dataset is loaded
-    feature_inj = 0 # activate feature value injection with 1
+    int_split = 0 # whether to use integer split
+    nr_bits_feature = None # nr of bits in feature value, it is set below when dataset is loaded
+    feature_inj = 1 # activate feature value injection with 1
     feature_idx_inj = 0 # activate feature idx injection with 1
     child_idx_inj = 0 # activate child idx injection with 1
-    reps = 10000 # how many times to evaluate for one bit error rate
+    reps = 5 # how many times to evaluate for one bit error rate
     # p2exp = 6 # error rates for evaluation start at 2^(-p2exp)
     # bers = bit_error_rates_generator(p2exp)
     bers = [0, 0.0001, 0.001, 0.01, 0.1, 0.25, 0.5, 1]
@@ -74,11 +74,14 @@ def main():
         X = X.astype(np.uint8)
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33, random_state=42)
 
+    # TODO: loop over models here, and use multiprocessing
     # train or load tree / forest
     # clf = DecisionTreeClassifier(max_depth=depth)
     # model = clf.fit(X_train, y_train)
     # joblib.dump(model, "DT{}_{}.pkl".format(depth, dataset), compress=9)
-    model = joblib.load('PREL_MODELS/IRIS/DT5_IRIS.pkl')
+    # model = joblib.load('PREL_MODELS/MNIST/DT10_MNIST.pkl')
+    clf = RandomForestClassifier(max_depth=depth, n_estimators=estims)
+    model = clf.fit(X_train, y_train)
 
     # create experiment folder and return the path to it
     exp_path = create_exp_folder(this_path)
@@ -114,7 +117,8 @@ def main():
         }
 
     # call evaluation function
-    bfi_tree(expdata_dict)
+    # bfi_tree(expdata_dict)
+    bfi_forest(expdata_dict)
 
     # dump experiment settings to file, but first remove unserializable elements
     keys_to_remove = ["model", "X_train", "X_test","y_train","y_test"]
