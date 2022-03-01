@@ -278,3 +278,13 @@ def readFileSensorless(dataset_path):
     Y = data[idx,-1]
     Y = Y-min(Y)
     return X, Y
+
+def readFileWinequality(dataset_path):
+    dataset_path_red = dataset_path + "winequality-red.csv"
+    dataset_path_white = dataset_path + "winequality-white.csv"
+    red = np.genfromtxt(dataset_path_red, delimiter=';', skip_header=1)
+    white = np.genfromtxt(dataset_path_white, delimiter=';', skip_header=1)
+    X = np.vstack((red[:,:-1],white[:,:-1])).astype(dtype=np.float32)
+    Y = np.concatenate((red[:,-1], white[:,-1]))
+    Y = Y-min(Y)
+    return X, Y

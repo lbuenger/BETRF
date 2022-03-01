@@ -15,7 +15,7 @@ import joblib
 
 # own file imports
 from Utils import create_exp_folder, store_exp_data_dict, store_exp_data_write, bit_error_rates_generator
-from loadData import readFileMNIST, readFileAdult, readFileSensorless
+from loadData import readFileMNIST, readFileAdult, readFileSensorless, readFileWinequality
 from pathEvals import tree_nrOfCorrectPredictionsDespiteWrongPath, tree_nrOfChangedPathsWithOneBF, tree_PEs_estim
 from bfi_evaluation import bfi_tree, bfi_forest
 
@@ -25,7 +25,7 @@ def main():
     this_path = os.getcwd()
 
     # command line arguments, use argparse here later
-    dataset = "SENSORLESS"
+    dataset = "WINEQUALITY"
 
     # DT/RF configs
     DT_RF = "RF" # DT or RF
@@ -45,6 +45,7 @@ def main():
     bers = [0, 0.0001, 0.001, 0.01, 0.1, 0.25, 0.5, 1]
     export_accuracy = 1 # 1 if accuracy list for a bit error rate should be exported as .npy, else None
     all_data = []
+    random_state = 42 #np.random.randint(low=1, high=100)
 
     # read data
     train_path = ""
@@ -73,7 +74,7 @@ def main():
         X *= 10
         X = X.astype(np.uint8)
         # rint = np.random.randint(low=1, high=100)
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33, random_state=42)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33, random_state=random_state)
 
     if dataset == "ADULT":
         nr_bits_split = 32 # floating point
@@ -82,7 +83,7 @@ def main():
         X, y = readFileAdult(dataset_path)
         # rint = np.random.randint(low=1, high=100)
         X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.33, random_state=42)
+        X, y, test_size=0.33, random_state=random_state)
 
     if dataset == "SENSORLESS":
         nr_bits_split = 32 # floating point
@@ -91,7 +92,16 @@ def main():
         X, y = readFileSensorless(dataset_path)
         # rint = np.random.randint(low=1, high=100)
         X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.33, random_state=42)
+        X, y, test_size=0.33, random_state=random_state)
+
+    if dataset == "WINEQUALITY":
+        nr_bits_split = 32 # floating point
+        nr_bits_feature = 32 # floating point
+        dataset_path = "wine-quality/dataset/"
+        X, y = readFileWinequality(dataset_path)
+        # rint = np.random.randint(low=1, high=100)
+        X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.33, random_state=random_state)
 
     # TODO: loop over models here, and use multiprocessing
     # train or load tree / forest
