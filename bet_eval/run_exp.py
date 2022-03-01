@@ -15,7 +15,7 @@ import joblib
 
 # own file imports
 from Utils import create_exp_folder, store_exp_data_dict, store_exp_data_write, bit_error_rates_generator
-from loadData import readFileMNIST
+from loadData import readFileMNIST, readFileAdult
 from pathEvals import tree_nrOfCorrectPredictionsDespiteWrongPath, tree_nrOfChangedPathsWithOneBF, tree_PEs_estim
 from bfi_evaluation import bfi_tree, bfi_forest
 
@@ -25,18 +25,18 @@ def main():
     this_path = os.getcwd()
 
     # command line arguments, use argparse here later
-    dataset = "MNIST"
+    dataset = "ADULT"
 
     # DT/RF configs
     DT_RF = "RF" # DT or RF
     depth = 5 # DT/RF depth (single value for DT, list for RFs)
     estims = 5 # number of DTs in RF (does not matter for DT)
-    split_inj = 0 # activate split value injection with 1
+    split_inj = 1 # activate split value injection with 1
     feature_inj = 0 # activate feature value injection with 1
     nr_bits_split = None # nr of bits in split value, it is set below when dataset is loaded
     int_split = 0 # whether to use integer split
     nr_bits_feature = None # nr of bits in feature value, it is set below when dataset is loaded
-    feature_inj = 1 # activate feature value injection with 1
+    feature_inj = 0 # activate feature value injection with 1
     feature_idx_inj = 0 # activate feature idx injection with 1
     child_idx_inj = 0 # activate child idx injection with 1
     reps = 5 # how many times to evaluate for one bit error rate
@@ -72,7 +72,17 @@ def main():
         X, y = iris.data, iris.target
         X *= 10
         X = X.astype(np.uint8)
+        # rint = np.random.randint(low=1, high=100)
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33, random_state=42)
+
+    if dataset == "ADULT":
+        nr_bits_split = 32 # floating point
+        nr_bits_feature = 32 # floating point
+        dataset_path = "adult/dataset/adult.data"
+        X, y = readFileAdult(dataset_path)
+        # rint = np.random.randint(low=1, high=100)
+        X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.33, random_state=42)
 
     # TODO: loop over models here, and use multiprocessing
     # train or load tree / forest
