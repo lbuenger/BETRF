@@ -269,3 +269,12 @@ def readFileAdult(path):
     X = np.array(X).astype(dtype=np.int32)
     Y = np.array(Y)
     return X, Y
+
+def readFileSensorless(dataset_path):
+    data = np.genfromtxt(dataset_path, delimiter=' ')
+    idx = np.random.permutation(len(data))
+
+    X = data[idx,0:-1].astype(dtype=np.float32)
+    Y = data[idx,-1]
+    Y = Y-min(Y)
+    return X, Y

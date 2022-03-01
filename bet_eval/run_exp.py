@@ -15,7 +15,7 @@ import joblib
 
 # own file imports
 from Utils import create_exp_folder, store_exp_data_dict, store_exp_data_write, bit_error_rates_generator
-from loadData import readFileMNIST, readFileAdult
+from loadData import readFileMNIST, readFileAdult, readFileSensorless
 from pathEvals import tree_nrOfCorrectPredictionsDespiteWrongPath, tree_nrOfChangedPathsWithOneBF, tree_PEs_estim
 from bfi_evaluation import bfi_tree, bfi_forest
 
@@ -25,7 +25,7 @@ def main():
     this_path = os.getcwd()
 
     # command line arguments, use argparse here later
-    dataset = "ADULT"
+    dataset = "SENSORLESS"
 
     # DT/RF configs
     DT_RF = "RF" # DT or RF
@@ -80,6 +80,15 @@ def main():
         nr_bits_feature = 32 # floating point
         dataset_path = "adult/dataset/adult.data"
         X, y = readFileAdult(dataset_path)
+        # rint = np.random.randint(low=1, high=100)
+        X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.33, random_state=42)
+
+    if dataset == "SENSORLESS":
+        nr_bits_split = 32 # floating point
+        nr_bits_feature = 32 # floating point
+        dataset_path = "sensorless-drive/dataset/Sensorless_drive_diagnosis.txt"
+        X, y = readFileSensorless(dataset_path)
         # rint = np.random.randint(low=1, high=100)
         X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.33, random_state=42)
