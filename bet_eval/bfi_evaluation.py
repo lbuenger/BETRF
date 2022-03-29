@@ -63,6 +63,7 @@ def bfi_tree(exp_dict):
     bers = exp_dict["bers"]
     dataset_name = exp_dict["dataset_name"]
     export_accuracy = exp_dict["export_accuracy"]
+    depth = exp_dict["depth"]
 
     # split
     split_inj = exp_dict["split_inj"]
@@ -166,7 +167,7 @@ def bfi_tree(exp_dict):
         bers_flattened = np.array(dim_1_all).flatten()
         accuracy_all_flattened = np.array(accuracy_all).flatten()
         stacked = np.stack((bers_flattened, accuracy_all_flattened))
-        filename = "acc_over_ber_DT{}_{}_reps_{}.npy".format(exp_dict["depth"], dataset_name, reps)
+        filename = exp_path + f"/acc_over_ber_DT{depth}_{dataset_name}_reps_{reps}.npy"
         with open(filename, 'wb') as f:
         	np.save(f, stacked)
 
@@ -183,6 +184,8 @@ def bfi_forest(exp_dict):
     bers = exp_dict["bers"]
     dataset_name = exp_dict["dataset_name"]
     export_accuracy = exp_dict["export_accuracy"]
+    depth = exp_dict["depth"]
+    estims = exp_dict["estims"]
 
     # split
     split_inj = exp_dict["split_inj"]
@@ -280,14 +283,14 @@ def bfi_forest(exp_dict):
             tree.tree_.bit_flip_injection_chidx = 0
 
     # TODO: export accuracy in a certain format
-    # if export_accuracy is not None:
-    #     dim_1_all = []
-    #     for idx, acc in enumerate(accuracy_all):
-    #         dim_1 = [bers[idx] for x in range(reps)]
-    #         dim_1_all.append(dim_1)
-    #     bers_flattened = np.array(dim_1_all).flatten()
-    #     accuracy_all_flattened = np.array(accuracy_all).flatten()
-    #     stacked = np.stack((bers_flattened, accuracy_all_flattened))
-    #     filename = "acc_over_ber_DT{}_{}_reps_{}.npy".format(exp_dict["depth"], dataset_name, reps)
-    #     with open(filename, 'wb') as f:
-    #     	np.save(f, stacked)
+    if export_accuracy is not None:
+        dim_1_all = []
+        for idx, acc in enumerate(accuracy_all):
+            dim_1 = [bers[idx] for x in range(reps)]
+            dim_1_all.append(dim_1)
+        bers_flattened = np.array(dim_1_all).flatten()
+        accuracy_all_flattened = np.array(accuracy_all).flatten()
+        stacked = np.stack((bers_flattened, accuracy_all_flattened))
+        filename = exp_path + f"/acc_over_ber_RF_D{depth}_T{estims}_{dataset_name}_reps_{reps}.npy"
+        with open(filename, 'wb') as f:
+        	np.save(f, stacked)

@@ -41,6 +41,20 @@ def bit_error_rates_generator(p2exp):
     bers = bers[:-1]
     return bers
 
+def quantize_data(data, q_range_bits):
+    data = np.array(data)
+    # get number of quantization levels
+    q_range = 2**(q_range_bits) - 1
+    # uniform quantization to unsigned integer, with q_range quantization levels
+    # shift the data by the minumum value (negative or 0 here) so that all values are positive
+    quantized = data - data.min()
+    # multiply by the ratio of quantization range and data value range
+    quantized = quantized * (q_range/(data.max() - data.min()))
+    # round the result to nearest integer
+    quantized = np.round(quantized)
+    return quantized
+
+
 def get_nr_child_idx(clf):
     n_nodes = clf.tree_.node_count
     children_left = clf.tree_.children_left

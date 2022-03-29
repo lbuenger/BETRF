@@ -8,13 +8,14 @@ from sklearn.ensemble import RandomForestClassifier
 import numpy as np
 from sklearn.metrics import accuracy_score, precision_score, recall_score, precision_recall_curve, average_precision_score
 import matplotlib.pyplot as plt
+from scipy.stats import norm
 from pandas.core.common import flatten
 from datetime import datetime
 import os
 import joblib
 
 # own file imports
-from Utils import create_exp_folder, store_exp_data_dict, store_exp_data_write, bit_error_rates_generator
+from Utils import create_exp_folder, store_exp_data_dict, store_exp_data_write, bit_error_rates_generator, quantize_data
 from loadData import readFileMNIST, readFileAdult, readFileSensorless, readFileWinequality
 from pathEvals import tree_nrOfCorrectPredictionsDespiteWrongPath, tree_nrOfChangedPathsWithOneBF, tree_PEs_estim
 from bfi_evaluation import bfi_tree, bfi_forest
@@ -25,10 +26,10 @@ def main():
     this_path = os.getcwd()
 
     # command line arguments, use argparse here later
-    dataset = "MNIST"
+    dataset = "ADULT"
 
     # DT/RF configs
-    DT_RF = "RF" # DT or RF (needs to be correctly specified when loading a model)
+    DT_RF = "DT" # DT or RF (needs to be correctly specified when loading a model)
     depth = 5 # DT/RF depth (single value for DT, list for RFs)
     estims = 5 # number of DTs in RF (does not matter for DT)
     split_inj = 1 # activate split value injection with 1
@@ -39,7 +40,7 @@ def main():
     feature_inj = 0 # activate feature value injection with 1
     feature_idx_inj = 0 # activate feature idx injection with 1
     child_idx_inj = 0 # activate child idx injection with 1
-    reps = 1 # how many times to evaluate for one bit error rate
+    reps = 5 # how many times to evaluate for one bit error rate
     # p2exp = 6 # error rates for evaluation start at 2^(-p2exp)
     # bers = bit_error_rates_generator(p2exp)
     bers = [0, 0.0001, 0.001, 0.01, 0.1, 0.25, 0.5, 1]
@@ -50,6 +51,7 @@ def main():
     load_model = None
     # load_model = "DT5_MNIST.pkl"
     # load_model = "RF_D5_T5_MNIST.pkl"
+    plot_histogram = 1
 
     # read data
     train_path = ""
@@ -81,13 +83,16 @@ def main():
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33, random_state=random_state)
 
     if dataset == "ADULT":
-        nr_bits_split = 32 # floating point
-        nr_bits_feature = 32 # floating point
+        nr_bits_split = 8 # int, use 32 for fp
+        nr_bits_feature = 8 # int, use 32 for fp
         dataset_path = "adult/dataset/adult.data"
         X, y = readFileAdult(dataset_path)
         # rint = np.random.randint(low=1, high=100)
         X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.33, random_state=random_state)
+        # comment out quantization, if it is not desired
+        X_train = quantize_data(X_train, nr_bits_feature)
+        X_test = quantize_data(X_test, nr_bits_feature)
 
     if dataset == "SENSORLESS":
         nr_bits_split = 32 # floating point
@@ -119,13 +124,13 @@ def main():
             clf = DecisionTreeClassifier(max_depth=depth)
             model = clf.fit(X_train, y_train)
             if store_model is not None:
-                joblib.dump(model, exp_path+f"/DT{depth}_{dataset}.pkl", compress=9)
+                joblib.dump(model, exp_path+f"/D{depth}_{dataset}.pkl", compress=9)
 
         if DT_RF == "RF":
             clf = RandomForestClassifier(max_depth=depth, n_estimators=estims)
             model = clf.fit(X_train, y_train)
             if store_model is not None:
-                joblib.dump(model, exp_path+f"/RF_D{depth}_T{estims}_{dataset}.pkl", compress=9)
+                joblib.dump(model, exp_path+f"/D{depth}_T{estims}_{dataset}.pkl", compress=9)
 
     # create data file to store experiment results
     exp_data = open(exp_path + "/results.txt", "a")
@@ -171,6 +176,26 @@ def main():
     to_dump_path = exp_path + "/results.txt"
     # TODO convert "bers" to a python array before dumping
     store_exp_data_write(to_dump_path, to_dump_data)
+
+    if plot_histogram is not None:
+        # print("Xtrain", X_train)
+
+        #plot histogram of values
+        mu, std = norm.fit(X_train.flatten())
+        s = np.random.normal(mu, std, 100)
+        plt.hist(X_train.flatten(), bins=50, color='g')
+        xmin, xmax = plt.xlim()
+        x = np.linspace(xmin, xmax, 1000)
+        # p = norm.pdf(x, mu, std)
+        # plt.plot(x, p, 'k', linewidth=2)
+        plt.semilogy()
+        title = "Fit results: mu = %.2f,  std = %.2f" % (mu, std)
+        plt.title(title)
+        plt.savefig("input_distr.pdf", format="pdf")
+
+        min = np.abs(X_train).min()
+        max = np.abs(X_train).max()
+        print(f"min: {min}, max: {max}")
 
     # visualize model (for tree)
     # fig = plt.figure(figsize=(25,20))
