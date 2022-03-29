@@ -1,6 +1,6 @@
 # libary imports
 import csv,operator,sys,os
-from sklearn.datasets import load_iris
+from sklearn.datasets import load_iris, fetch_olivetti_faces
 from sklearn.model_selection import train_test_split
 from sklearn import tree
 from sklearn.tree import DecisionTreeClassifier
@@ -26,12 +26,12 @@ def main():
     this_path = os.getcwd()
 
     # command line arguments, use argparse here later
-    dataset = "ADULT"
+    dataset = "OLIVETTI"
 
     # DT/RF configs
-    DT_RF = "DT" # DT or RF (needs to be correctly specified when loading a model)
-    depth = 5 # DT/RF depth (single value for DT, list for RFs)
-    estims = 5 # number of DTs in RF (does not matter for DT)
+    DT_RF = "RF" # DT or RF (needs to be correctly specified when loading a model)
+    depth = 100 # DT/RF depth (single value for DT, list for RFs)
+    estims = 100 # number of DTs in RF (does not matter for DT)
     split_inj = 1 # activate split value injection with 1
     feature_inj = 0 # activate feature value injection with 1
     nr_bits_split = None # nr of bits in split value, it is set below when dataset is loaded
@@ -40,7 +40,7 @@ def main():
     feature_inj = 0 # activate feature value injection with 1
     feature_idx_inj = 0 # activate feature idx injection with 1
     child_idx_inj = 0 # activate child idx injection with 1
-    reps = 5 # how many times to evaluate for one bit error rate
+    reps = 1 # how many times to evaluate for one bit error rate
     # p2exp = 6 # error rates for evaluation start at 2^(-p2exp)
     # bers = bit_error_rates_generator(p2exp)
     bers = [0, 0.0001, 0.001, 0.01, 0.1, 0.25, 0.5, 1]
@@ -51,7 +51,7 @@ def main():
     load_model = None
     # load_model = "DT5_MNIST.pkl"
     # load_model = "RF_D5_T5_MNIST.pkl"
-    plot_histogram = 1
+    plot_histogram = None # plots histogram of input data (useful for quantization)
 
     # read data
     train_path = ""
@@ -111,6 +111,19 @@ def main():
         # rint = np.random.randint(low=1, high=100)
         X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.33, random_state=random_state)
+
+    if dataset == "OLIVETTI":
+        nr_bits_split = 8
+        nr_bits_feature = 8
+        dataset_train_path = "/sklearn"
+        dataset_test_path = "/sklearn"
+        train_path = this_path + dataset_train_path
+        test_path = this_path + dataset_test_path
+        X, y = fetch_olivetti_faces(shuffle=True, random_state=random_state, download_if_missing=True, return_X_y=True)
+        X = np.array(X*255).astype(np.uint8) # use unsigned ints
+        # rint = np.random.randint(low=1, high=100)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33, random_state=random_state)
+
 
     # create experiment folder and return the path to it
     exp_path = create_exp_folder(this_path)
