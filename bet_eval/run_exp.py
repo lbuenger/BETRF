@@ -25,27 +25,31 @@ def main():
     this_path = os.getcwd()
 
     # command line arguments, use argparse here later
-    dataset = "WINEQUALITY"
+    dataset = "MNIST"
 
     # DT/RF configs
-    DT_RF = "RF" # DT or RF
+    DT_RF = "RF" # DT or RF (needs to be correctly specified when loading a model)
     depth = 5 # DT/RF depth (single value for DT, list for RFs)
     estims = 5 # number of DTs in RF (does not matter for DT)
     split_inj = 1 # activate split value injection with 1
     feature_inj = 0 # activate feature value injection with 1
     nr_bits_split = None # nr of bits in split value, it is set below when dataset is loaded
-    int_split = 0 # whether to use integer split
+    int_split = 1 # whether to use integer split
     nr_bits_feature = None # nr of bits in feature value, it is set below when dataset is loaded
     feature_inj = 0 # activate feature value injection with 1
     feature_idx_inj = 0 # activate feature idx injection with 1
     child_idx_inj = 0 # activate child idx injection with 1
-    reps = 5 # how many times to evaluate for one bit error rate
+    reps = 1 # how many times to evaluate for one bit error rate
     # p2exp = 6 # error rates for evaluation start at 2^(-p2exp)
     # bers = bit_error_rates_generator(p2exp)
     bers = [0, 0.0001, 0.001, 0.01, 0.1, 0.25, 0.5, 1]
     export_accuracy = 1 # 1 if accuracy list for a bit error rate should be exported as .npy, else None
     all_data = []
     random_state = 42 #np.random.randint(low=1, high=100)
+    store_model = 1
+    load_model = None
+    # load_model = "DT5_MNIST.pkl"
+    # load_model = "RF_D5_T5_MNIST.pkl"
 
     # read data
     train_path = ""
@@ -103,17 +107,25 @@ def main():
         X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.33, random_state=random_state)
 
-    # TODO: loop over models here, and use multiprocessing
-    # train or load tree / forest
-    # clf = DecisionTreeClassifier(max_depth=depth)
-    # model = clf.fit(X_train, y_train)
-    # joblib.dump(model, "DT{}_{}.pkl".format(depth, dataset), compress=9)
-    # model = joblib.load('PREL_MODELS/MNIST/DT10_MNIST.pkl')
-    clf = RandomForestClassifier(max_depth=depth, n_estimators=estims)
-    model = clf.fit(X_train, y_train)
-
     # create experiment folder and return the path to it
     exp_path = create_exp_folder(this_path)
+
+    # TODO: loop over models here, and use multiprocessing
+    # train or load tree / forest
+    if load_model is not None:
+        model = joblib.load(load_model)
+    else:
+        if DT_RF == "DT":
+            clf = DecisionTreeClassifier(max_depth=depth)
+            model = clf.fit(X_train, y_train)
+            if store_model is not None:
+                joblib.dump(model, exp_path+f"/DT{depth}_{dataset}.pkl", compress=9)
+
+        if DT_RF == "RF":
+            clf = RandomForestClassifier(max_depth=depth, n_estimators=estims)
+            model = clf.fit(X_train, y_train)
+            if store_model is not None:
+                joblib.dump(model, exp_path+f"/RF_D{depth}_T{estims}_{dataset}.pkl", compress=9)
 
     # create data file to store experiment results
     exp_data = open(exp_path + "/results.txt", "a")
@@ -146,8 +158,10 @@ def main():
         }
 
     # call evaluation function
-    # bfi_tree(expdata_dict)
-    bfi_forest(expdata_dict)
+    if DT_RF == "DT":
+        bfi_tree(expdata_dict)
+    if DT_RF == "RF":
+        bfi_forest(expdata_dict)
 
     # dump experiment settings to file, but first remove unserializable elements
     keys_to_remove = ["model", "X_train", "X_test","y_train","y_test"]
@@ -155,6 +169,7 @@ def main():
         expdata_dict.pop(key)
     to_dump_data = expdata_dict
     to_dump_path = exp_path + "/results.txt"
+    # TODO convert "bers" to a python array before dumping
     store_exp_data_write(to_dump_path, to_dump_data)
 
     # visualize model (for tree)
