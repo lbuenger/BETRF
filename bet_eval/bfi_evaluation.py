@@ -179,6 +179,7 @@ def bfi_forest(exp_dict):
     # get data from dictionary
     clf = exp_dict["model"]
     X_test = exp_dict["X_test"]
+    # X_test = X_test[0].reshape(1, -1)
     y_test = exp_dict["y_test"]
     reps = exp_dict["reps"]
     bers = exp_dict["bers"]
@@ -186,6 +187,7 @@ def bfi_forest(exp_dict):
     export_accuracy = exp_dict["export_accuracy"]
     depth = exp_dict["depth"]
     estims = exp_dict["estims"]
+    true_majority = exp_dict["true_majority"]
 
     # split
     split_inj = exp_dict["split_inj"]
@@ -250,8 +252,37 @@ def bfi_forest(exp_dict):
 
         acc_scores = []
         for rep in range(reps):
-            out = clf.predict(X_test)
-            acc_scores.append(accuracy_score(y_test, out))
+            if true_majority == 0:
+                # weighted majority vote
+                out = clf.predict(X_test)
+                acc_scores.append(accuracy_score(y_test, out))
+            else:
+                ### true maj. vote (for ECML paper)
+                # for idx in range(len(clf.estimators_)):
+                store_pred_matrix = []
+                for idx in range(len(clf.estimators_)):
+                    store_pred = clf.estimators_[idx].predict(X_test)
+                    store_pred_matrix.append(store_pred)
+                # finished all trees, preds are in store_pred_matrix
+                store_pred_matrix_np = np.array(store_pred_matrix, dtype=np.uint8)
+                # majority vote over dim 0
+                argmax_list = []
+                for j in range(store_pred_matrix_np.shape[1]):
+                    maj_vote = np.bincount(store_pred_matrix_np[:,j])
+                    argmax = np.argmax(maj_vote)
+                    argmax_list.append(argmax)
+                # print("shapre", store_pred_matrix_np[:,0].shape)
+                # print("len", len(argmax_list))
+                argmax_list_np = np.array(argmax_list)
+                acc_scores.append(accuracy_score(y_test, argmax_list_np))
+                # print("predicted label 6: ", argmax_list_np[48])
+                # print("actual label 6: ", y_test[48])
+                # print("old", accuracy_score(y_test, out))
+                # print("new", accuracy_score(y_test, argmax_list_np))
+                ###
+
+
+        # acc_scores_np = np.array(acc_scores)
         acc_scores_np = np.array(acc_scores)
         # print("ACC scores", acc_scores_np)
         acc_mean = np.mean(acc_scores_np)

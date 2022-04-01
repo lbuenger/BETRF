@@ -1,6 +1,6 @@
 # libary imports
 import csv,operator,sys,os
-from sklearn.datasets import load_iris, fetch_olivetti_faces
+from sklearn.datasets import load_iris, fetch_olivetti_faces, fetch_covtype
 from sklearn.model_selection import train_test_split
 from sklearn import tree
 from sklearn.tree import DecisionTreeClassifier
@@ -16,7 +16,7 @@ import joblib
 
 # own file imports
 from Utils import create_exp_folder, store_exp_data_dict, store_exp_data_write, bit_error_rates_generator, quantize_data
-from loadData import readFileMNIST, readFileAdult, readFileSensorless, readFileWinequality
+from loadData import readFileMNIST, readFileAdult, readFileSensorless, readFileWinequality, readFileSpamBase
 from pathEvals import tree_nrOfCorrectPredictionsDespiteWrongPath, tree_nrOfChangedPathsWithOneBF, tree_PEs_estim
 from bfi_evaluation import bfi_tree, bfi_forest
 
@@ -26,12 +26,12 @@ def main():
     this_path = os.getcwd()
 
     # command line arguments, use argparse here later
-    dataset = "OLIVETTI"
+    dataset = "SPAMBASE"
 
     # DT/RF configs
     DT_RF = "RF" # DT or RF (needs to be correctly specified when loading a model)
-    depth = 100 # DT/RF depth (single value for DT, list for RFs)
-    estims = 100 # number of DTs in RF (does not matter for DT)
+    depth = 5 # DT/RF depth (single value for DT, list for RFs)
+    estims = 5 # number of DTs in RF (does not matter for DT)
     split_inj = 1 # activate split value injection with 1
     feature_inj = 0 # activate feature value injection with 1
     nr_bits_split = None # nr of bits in split value, it is set below when dataset is loaded
@@ -40,18 +40,20 @@ def main():
     feature_inj = 0 # activate feature value injection with 1
     feature_idx_inj = 0 # activate feature idx injection with 1
     child_idx_inj = 0 # activate child idx injection with 1
-    reps = 1 # how many times to evaluate for one bit error rate
+    reps = 5 # how many times to evaluate for one bit error rate
     # p2exp = 6 # error rates for evaluation start at 2^(-p2exp)
     # bers = bit_error_rates_generator(p2exp)
-    bers = [0, 0.0001, 0.001, 0.01, 0.1, 0.25, 0.5, 1]
+    bers = [0, 0.0001, 0.001, 0.01, 0.1, 0.2, 0.4, 0.6, 0.8, 1]
     export_accuracy = 1 # 1 if accuracy list for a bit error rate should be exported as .npy, else None
     all_data = []
     random_state = 42 #np.random.randint(low=1, high=100)
-    store_model = 1
+    store_model = None
     load_model = None
+    # load_model = "experiments/MNIST_RF_T5_D5/RF_D5_T5_MNIST.pkl"
     # load_model = "DT5_MNIST.pkl"
     # load_model = "RF_D5_T5_MNIST.pkl"
     plot_histogram = None # plots histogram of input data (useful for quantization)
+    true_majority = 1
 
     # read data
     train_path = ""
@@ -124,6 +126,27 @@ def main():
         # rint = np.random.randint(low=1, high=100)
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33, random_state=random_state)
 
+    if dataset == "COVTYPE":
+        nr_bits_split = 8
+        nr_bits_feature = 8
+        dataset_train_path = "/sklearn"
+        dataset_test_path = "/sklearn"
+        train_path = this_path + dataset_train_path
+        test_path = this_path + dataset_test_path
+        X, y = fetch_covtype("experiments/COVTYPE/", shuffle=True, random_state=random_state, download_if_missing=True, return_X_y=True)
+        X = np.array(X).astype(np.uint8) # use unsigned ints
+        # rint = np.random.randint(low=1, high=100)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33, random_state=random_state)
+
+    if dataset == "SPAMBASE":
+        nr_bits_split = 8
+        nr_bits_feature = 8
+        dataset_path = "spambase/dataset/spambase.data"
+        X, y = readFileSpamBase(dataset_path)
+        # rint = np.random.randint(low=1, high=100)
+        X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.33, random_state=random_state)
+
 
     # create experiment folder and return the path to it
     exp_path = create_exp_folder(this_path)
@@ -172,7 +195,8 @@ def main():
         "child_idx_inj": child_idx_inj,
         "reps": reps,
         "bers": bers,
-        "export_accuracy": export_accuracy
+        "export_accuracy": export_accuracy,
+        "true_majority": true_majority
         }
 
     # call evaluation function
