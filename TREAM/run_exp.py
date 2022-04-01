@@ -49,8 +49,8 @@ def main():
     np.random.seed(random_state)
     # p2exp = 6 # error rates for evaluation start at 2^(-p2exp)
     # bers = bit_error_rates_generator(p2exp)
-    # bers = [0, 0.0001, 0.001, 0.01, 0.1, 0.2, 0.4, 0.6, 0.8, 1]
-    bers = [0, 0.0001, 0.001]
+    bers = [0, 0.0001, 0.001, 0.01, 0.1, 0.2, 0.4, 0.6, 0.8, 1]
+    # bers = [0, 0.0001, 0.001]
     plot_histogram = None # plots histogram of input data (useful for quantization)
 
     # read data
