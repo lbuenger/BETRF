@@ -1,5 +1,5 @@
 from sklearn.model_selection import train_test_split
-from loadData import readFileMNIST, readFileAdult, readFileSensorless, readFileWinequality, readFileSpamBase, readFileWearable
+from loadData import readFileMNIST, readFileAdult, readFileSensorless, readFileWinequality, readFileSpamBase, readFileWearable, readFileLetter
 from sklearn.datasets import load_iris, fetch_olivetti_faces, fetch_covtype
 from Utils import quantize_data
 import numpy as np
@@ -103,6 +103,19 @@ def getData(dataset, this_path, nr_bits_split, nr_bits_feature, random_state):
         # nr_bits_feature = 16
         dataset_path = "data/wearable/dataset.csv"
         X, y = readFileWearable(dataset_path)
+        # print("ma", X.max(), X.min())
+        # X = np.array(X).astype(np.uint8)
+        # rint = np.random.randint(low=1, high=100)
+        X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.33, random_state=random_state)
+        X_train = quantize_data(X_train, nr_bits_feature)
+        X_test = quantize_data(X_test, nr_bits_feature)
+
+    if dataset == "LETTER":
+        # nr_bits_split = 8
+        # nr_bits_feature = 8
+        dataset_path = "data/letter/letter-recognition.data"
+        X, y = readFileLetter(dataset_path)
         # print("ma", X.max(), X.min())
         # X = np.array(X).astype(np.uint8)
         # rint = np.random.randint(low=1, high=100)

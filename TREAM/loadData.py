@@ -338,3 +338,18 @@ def readFileWearable(path):
         Y.append(y)
 
     return np.array(X).astype(dtype=np.int32), np.array(Y)
+
+
+def readFileLetter(path):
+    f = open(path, 'r')
+    X = []
+    Y = []
+    for row in f:
+        entries = row.strip().split(",")
+        x = [int(e) for e in entries[1:]]
+        y = ord(entries[0]) - 65
+
+        X.append(x)
+        Y.append(y)
+
+    return np.array(X).astype(dtype=np.int32), np.array(Y)
