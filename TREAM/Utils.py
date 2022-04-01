@@ -37,7 +37,6 @@ def bit_error_rates_generator(p2exp):
     for point in rest_array:
         for step in temp:
             ber_array.append(point*step)
-    # bers = np.array(ber_array, dtype=np.float32)
     bers = bers[:-1]
     return bers
 

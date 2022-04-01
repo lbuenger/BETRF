@@ -1,20 +1,18 @@
 # libary imports
 import csv,operator,sys,os
+from datetime import datetime
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.stats import norm
 from sklearn import tree
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier
-import numpy as np
 from sklearn.metrics import accuracy_score, precision_score, recall_score, precision_recall_curve, average_precision_score
-import matplotlib.pyplot as plt
-from scipy.stats import norm
 from pandas.core.common import flatten
-from datetime import datetime
-import os
 import joblib
 
 # own file imports
 from Utils import create_exp_folder, store_exp_data_dict, store_exp_data_write, bit_error_rates_generator
-from pathEvals import tree_nrOfCorrectPredictionsDespiteWrongPath, tree_nrOfChangedPathsWithOneBF, tree_PEs_estim
 from bfi_evaluation import bfi_tree, bfi_forest
 from prepareExpData import getData
 
@@ -24,7 +22,7 @@ def main():
     this_path = os.getcwd()
 
     # command line arguments, use argparse here later
-    dataset = "WEARABLE"
+    dataset = "MNIST"
 
     # DT/RF configs
     DT_RF = "RF" # DT or RF (needs to be correctly specified when loading a model)
@@ -118,7 +116,6 @@ def main():
         expdata_dict.pop(key)
     to_dump_data = expdata_dict
     to_dump_path = exp_path + "/results.txt"
-    # TODO convert "bers" to a python array before dumping
     store_exp_data_write(to_dump_path, to_dump_data)
 
     if plot_histogram is not None:
