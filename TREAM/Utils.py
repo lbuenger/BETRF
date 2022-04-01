@@ -4,6 +4,36 @@ from pandas.core.common import flatten
 import os
 import json
 
+def parse_args(parser):
+
+    # model configurations
+    parser.add_argument('--model', type=str, default="DT",
+                    help='DT/RF')
+    parser.add_argument('--dataset', type=str, default=None,
+                    help='MNIST/IRIS/ADULT/SENSORLESS/WINEQUALITY/OLIVETTI/COVTYPE/SPAMBASE/WEARABLE/LETTER')
+    parser.add_argument('--depth', type=int, default=5, help='Maximum depth of the trees')
+    parser.add_argument('--estims', type=int, default=5, help='Number of trees in the ensemble')
+    parser.add_argument('--load-model-path', type=str, default=None, help='Specify path to model if it should be loaded, otherwise a model will be trained from scratch')
+    parser.add_argument('--store-model', type=int, default=None, help='Set to 1 to store model as .pkl')
+
+    # bit flip onjection experiment settings
+    parser.add_argument('--trials', type=int, default=5, help='Number of repetitions of the entire test set in bit flip injection')
+    parser.add_argument('--splitval-inj', type=int, default=0, help='Bit flip injection  into split values (activate with 1)')
+    parser.add_argument('--featval-inj', type=int, default=0, help='Bit flip injection into feature values (activate with 1)')
+    parser.add_argument('--featidx-inj', type=int, default=0, help='Bit flip injection into feature indices (activate with 1)')
+    parser.add_argument('--chidx-inj', type=int, default=0, help='Bit flip injection into child indices (activate with 1)')
+
+    # value encoding
+    parser.add_argument('--nr-bits-split', type=int, default=8, help='Number of bits to encode the split value')
+    parser.add_argument('--nr-bits-feature', type=int, default=8, help='Number of bits to encode the feature value')
+    parser.add_argument('--int-split', type=int, default=0, help='Whether to encode the split values as integers')
+
+    # other settings
+    parser.add_argument('--true-majority', type=int, default=0, help='Whether to use true majority vote or the standard')
+    parser.add_argument('--seed', type=int, default=42, metavar='S',
+                        help='random seed (default: 42)')
+    parser.add_argument('--export-accuracy', type=int, default=None, help='Bit flip injection')
+
 def create_exp_folder(this_path):
     exp_path = ""
     access_rights = 0o755

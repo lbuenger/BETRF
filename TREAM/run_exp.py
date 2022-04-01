@@ -10,9 +10,10 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, precision_score, recall_score, precision_recall_curve, average_precision_score
 from pandas.core.common import flatten
 import joblib
+import argparse
 
 # own file imports
-from Utils import create_exp_folder, store_exp_data_dict, store_exp_data_write, bit_error_rates_generator
+from Utils import create_exp_folder, store_exp_data_dict, store_exp_data_write, bit_error_rates_generator, parse_args
 from bfi_evaluation import bfi_tree, bfi_forest
 from prepareExpData import getData
 
@@ -20,37 +21,37 @@ def main():
     ### Preparations and configs
     # paths to train and test
     this_path = os.getcwd()
+    parser = argparse.ArgumentParser()
+    parse_args(parser)
+    args = parser.parse_args()
 
     # command line arguments, use argparse here later
-    dataset = "MNIST"
+    dataset = args.dataset
 
     # DT/RF configs
-    DT_RF = "RF" # DT or RF (needs to be correctly specified when loading a model)
-    depth = 5 # DT/RF depth (single value for DT, list for RFs)
-    estims = 5 # number of DTs in RF (does not matter for DT)
-    split_inj = 1 # activate split value injection with 1
-    feature_inj = 0 # activate feature value injection with 1
-    nr_bits_split = 32 # nr of bits in split value
-    nr_bits_feature = 32 # nr of bits in feature value
-    int_split = 0 # whether to use integer split
-    feature_inj = 0 # activate feature value injection with 1
-    feature_idx_inj = 0 # activate feature idx injection with 1
-    child_idx_inj = 0 # activate child idx injection with 1
-    reps = 5 # how many times to evaluate for one bit error rate
+    DT_RF = args.model # DT or RF (needs to be correctly specified when loading a model)
+    depth = args.depth # DT/RF depth (single value for DT, list for RFs)
+    estims = args.estims # number of DTs in RF (does not matter for DT)
+    split_inj = args.splitval_inj # activate split value injection with 1
+    feature_inj = args.featval_inj # activate feature value injection with 1
+    feature_idx_inj = args.featidx_inj # activate feature idx injection with 1
+    child_idx_inj = args.chidx_inj # activate child idx injection with 1
+    nr_bits_split = args.nr_bits_split # nr of bits in split value
+    nr_bits_feature = args.nr_bits_feature # nr of bits in feature value
+    int_split = args.int_split # whether to use integer split (use 1 to activate)
+    reps = args.trials # how many times to evaluate for one bit error rate
+    export_accuracy = args.export_accuracy # 1 if accuracy list for a bit error rate should be exported as .npy, else None
+    all_data = []
+    store_model = args.store_model
+    load_model = args.load_model_path
+    true_majority = args.true_majority
+    random_state = args.seed #np.random.randint(low=1, high=100)
+    np.random.seed(random_state)
     # p2exp = 6 # error rates for evaluation start at 2^(-p2exp)
     # bers = bit_error_rates_generator(p2exp)
     # bers = [0, 0.0001, 0.001, 0.01, 0.1, 0.2, 0.4, 0.6, 0.8, 1]
     bers = [0, 0.0001, 0.001]
-    export_accuracy = 1 # 1 if accuracy list for a bit error rate should be exported as .npy, else None
-    all_data = []
-    random_state = 42 #np.random.randint(low=1, high=100)
-    store_model = None
-    load_model = None
-    # load_model = "experiments/MNIST_RF_T5_D5/RF_D5_T5_MNIST.pkl"
-    # load_model = "DT5_MNIST.pkl"
-    # load_model = "RF_D5_T5_MNIST.pkl"
     plot_histogram = None # plots histogram of input data (useful for quantization)
-    true_majority = 1
 
     # read data
     X_train, y_train, X_test, y_test = getData(dataset, this_path, nr_bits_split, nr_bits_feature, random_state)
@@ -101,7 +102,8 @@ def main():
         "reps": reps,
         "bers": bers,
         "export_accuracy": export_accuracy,
-        "true_majority": true_majority
+        "true_majority": true_majority,
+        "random_state": random_state
         }
 
     # call evaluation function
