@@ -44,6 +44,7 @@ ctypedef fused realloc_ptr:
     (Cell*)
     (Node**)
     (StackRecord*)
+    (QueueRecord*)
     (PriorityHeapRecord*)
 
 cdef realloc_ptr safe_realloc(realloc_ptr* p, size_t nelems) nogil except *
@@ -87,6 +88,33 @@ cdef class Stack:
                   SIZE_t n_constant_features) nogil except -1
     cdef int pop(self, StackRecord* res) nogil
 
+
+# =============================================================================
+# Queue data structure
+# =============================================================================
+
+# A record on the queue for breadth-first tree growing
+cdef struct QueueRecord:
+    SIZE_t start
+    SIZE_t end
+    SIZE_t depth
+    SIZE_t parent
+    bint is_left
+    double impurity
+    SIZE_t n_constant_features
+    bint is_placeholder
+    SIZE_t placeholder_depth
+
+cdef class Queue:
+    cdef SIZE_t capacity
+    cdef SIZE_t size
+    cdef QueueRecord* queue_
+
+    cdef bint is_empty(self) nogil
+    cdef int enqueue(self, SIZE_t start, SIZE_t end, SIZE_t depth, SIZE_t parent,
+                  bint is_left, double impurity,
+                  SIZE_t n_constant_features, bint is_placeholder, SIZE_t placeholder_depth) nogil except -1
+    cdef int dequeue(self, QueueRecord* res) nogil
 
 # =============================================================================
 # PriorityHeap data structure

@@ -61,11 +61,17 @@ cdef class Criterion:
     cdef double node_impurity(self) nogil
     cdef void children_impurity(self, double* impurity_left,
                                 double* impurity_right) nogil
+
+    cdef void switched_children_impurity(self, double * impurity_left, double * impurity_right, SIZE_t left, SIZE_t mid,
+                                         SIZE_t right) nogil
+
     cdef void node_value(self, double* dest) nogil
     cdef double impurity_improvement(self, double impurity_parent,
                                      double impurity_left,
                                      double impurity_right) nogil
     cdef double proxy_impurity_improvement(self) nogil
+
+    cdef double switched_proxy_impurity_improvement(self, SIZE_t left, SIZE_t mid, SIZE_t right) nogil
 
 cdef class ClassificationCriterion(Criterion):
     """Abstract criterion for classification."""

@@ -17,6 +17,7 @@
 
 from ._criterion cimport Criterion
 
+from libc.stdio cimport printf
 from libc.stdlib cimport free
 from libc.stdlib cimport qsort
 from libc.string cimport memcpy
@@ -60,7 +61,7 @@ cdef class Splitter:
 
     def __cinit__(self, Criterion criterion, SIZE_t max_features,
                   SIZE_t min_samples_leaf, double min_weight_leaf,
-                  object random_state):
+                  object random_state, SIZE_t rsdt):
         """
         Parameters
         ----------
@@ -98,6 +99,9 @@ cdef class Splitter:
         self.min_samples_leaf = min_samples_leaf
         self.min_weight_leaf = min_weight_leaf
         self.random_state = random_state
+
+        self.rsdt = rsdt
+        self.feature_ranges = NULL
 
     def __dealloc__(self):
         """Destructor."""
@@ -178,6 +182,43 @@ cdef class Splitter:
         self.y = y
 
         self.sample_weight = sample_weight
+
+        # cdef DTYPE_t kp = 0
+        # for i in range(X.shape[0]):
+        #     kp = X[i][0]
+        #     printf("%f, ", kp)
+        #     kp = X[i][1]
+        #     printf("%f, ", kp)
+        #     kp = X[i][2]
+        #     printf("%f, ", kp)
+        #     kp = X[i][3]
+        #     printf("%f\n", kp)
+
+        # cdef SIZE_t kp = X.shape[0]
+        # printf("X.shape[0] = %ld\n", kp)
+        # printf("%ld, ", n_samples)
+        # printf("%f, ", weighted_n_samples)
+        # for i in range(n_samples):
+        #     printf("%ld, ", samples[i])
+        # printf("\n")
+
+        cdef DTYPE_t* feature_ranges = safe_realloc(&self.feature_ranges, n_features)
+        cdef DTYPE_t feature_min = 0
+        for j in range(n_features):
+            feature_ranges[j] = -INFINITY
+            feature_min = INFINITY
+            for i in range(n_samples):
+                if X[i][j] > feature_ranges[j]:
+                    feature_ranges[j] = X[i][j]
+                if X[i][j] < feature_min:
+                    feature_min = X[i][j]
+            feature_ranges[j] -= feature_min
+
+        # for j in range(n_features):
+        #     printf("%f, ", feature_ranges[j])
+        # printf("\n")
+
+
         return 0
 
     cdef int node_reset(self, SIZE_t start, SIZE_t end,
@@ -262,7 +303,8 @@ cdef class BestSplitter(BaseDenseSplitter):
                                self.max_features,
                                self.min_samples_leaf,
                                self.min_weight_leaf,
-                               self.random_state), self.__getstate__())
+                               self.random_state,
+                               self.rsdt), self.__getstate__())
 
     cdef int node_split(self, double impurity, SplitRecord* split,
                         SIZE_t* n_constant_features) nogil except -1:
@@ -309,7 +351,17 @@ cdef class BestSplitter(BaseDenseSplitter):
         cdef DTYPE_t current_feature_value
         cdef SIZE_t partition_end
 
+        # ADDED FOR ROBUST SPLIT DECISION
+        cdef SIZE_t left
+        cdef SIZE_t mid
+        cdef SIZE_t right
+        cdef SIZE_t loopcounter
+        cdef DTYPE_t rsd_threshold
+        cdef double threshold
+
         _init_split(&best, end)
+
+        # printf("node_split called")
 
         # Sample up to max_features without replacement using a
         # Fisher-Yates-based algorithm (using the local variables `f_i` and
@@ -364,12 +416,18 @@ cdef class BestSplitter(BaseDenseSplitter):
 
                 sort(Xf + start, samples + start, end - start)
 
+                #for i in range(start, end):
+                    #printf("Xf[%d] = %f, ", i, Xf[i])
+                #printf("\n")
+
+                # check for constant feature
                 if Xf[end - 1] <= Xf[start] + FEATURE_THRESHOLD:
                     features[f_j], features[n_total_constants] = features[n_total_constants], features[f_j]
 
                     n_found_constants += 1
                     n_total_constants += 1
 
+                # not a constant feature
                 else:
                     f_i -= 1
                     features[f_i], features[f_j] = features[f_j], features[f_i]
@@ -378,7 +436,30 @@ cdef class BestSplitter(BaseDenseSplitter):
                     self.criterion.reset()
                     p = start
 
+                    # printf("%d\n", self.n_samples)
+
+                    loopcounter = 0
+
+                    rsd_threshold = self.rsdt
+                    #printf("fresh rsdt = %f\n", rsd_threshold)
+                    loopcounter += 1
+
+                    # calculate relative rsd_threshold
+
+                    rsd_threshold *= self.feature_ranges[current.feature]
+                    #rsd_threshold *= (Xf[end-1] - Xf[start])
+                    #printf("Xf[%d]= %f, Xf[%d]= %f\n", end-1, start, Xf[end-1], Xf[start])
+                    #printf("multiplied rsdt = %f\n", rsd_threshold)
+                    rsd_threshold /= 100
+                    #printf("divided rsdt = %f\n", rsd_threshold)
+                    #printf("\n")
+
+                    # printf("rsdt = %f, feature = %ld\n", rsd_threshold, current.feature)
+
+                    # printf("rsdt= %f, Xf[start] = %f, Xf[end] = %f, start = %d, end = %d\n", rsd_threshold, Xf[start], Xf[end], start, end)
+
                     while p < end:
+                        # filter out constants
                         while (p + 1 < end and
                                Xf[p + 1] <= Xf[p] + FEATURE_THRESHOLD):
                             p += 1
@@ -404,8 +485,60 @@ cdef class BestSplitter(BaseDenseSplitter):
                                     (self.criterion.weighted_n_right < min_weight_leaf)):
                                 continue
 
-                            current_proxy_improvement = self.criterion.proxy_impurity_improvement()
+                            # ADDED ROBUST SPLIT DECICISION
 
+
+
+                            # printf("%ld\n", self.n_samples)
+
+                            # for i in range(0, self.n_samples):
+                            #     printf("Xf[%ld] = %f", i, Xf[i])
+                            # printf("\n")
+
+                            # printf("which switched_proxy_improvement is called? -> %f", self.criterion.switched_proxy_impurity_improvement(0 ,0, 0))
+
+
+                            #printf("rsd_threshold = %f\n", rsd_threshold)
+
+                            # with RSD
+                            if rsd_threshold > 0:
+
+                                left = current.pos
+                                threshold = Xf[current.pos] - rsd_threshold
+                                # search for all samples in range of rsd_threshold
+                                while left > start and Xf[left] > threshold:
+                                    left -= 1
+                                self.criterion.update(left)
+                                worst_robust_proxy_improvement = self.criterion.proxy_impurity_improvement()
+
+                                right = current.pos
+                                threshold = Xf[current.pos] + rsd_threshold
+                                # search for all samples in range of rsd_threshold
+                                while right < end and Xf[right] < threshold:
+                                    right += 1
+                                self.criterion.update(right)
+                                current_robust_proxy_improvement = self.criterion.proxy_impurity_improvement()
+                                if current_robust_proxy_improvement < worst_robust_proxy_improvement:
+                                    worst_robust_proxy_improvement = current_robust_proxy_improvement
+
+                                # calculate normal improvement of split
+                                self.criterion.update(current.pos)
+                                current_robust_proxy_improvement = self.criterion.proxy_impurity_improvement()
+                                if current_robust_proxy_improvement < worst_robust_proxy_improvement:
+                                    worst_robust_proxy_improvement = current_robust_proxy_improvement
+
+                                current_robust_proxy_improvement = self.criterion.switched_proxy_impurity_improvement(left, current.pos, right)
+                                if current_robust_proxy_improvement < worst_robust_proxy_improvement:
+                                    worst_robust_proxy_improvement = current_robust_proxy_improvement
+
+                                current_proxy_improvement = worst_robust_proxy_improvement
+
+                            # without RSD
+                            else:
+                                # calculate improvement of split
+                                current_proxy_improvement = self.criterion.proxy_impurity_improvement()
+
+                            # check if new split is better
                             if current_proxy_improvement > best_proxy_improvement:
                                 best_proxy_improvement = current_proxy_improvement
                                 # sum of halves is used to avoid infinite value
@@ -452,6 +585,9 @@ cdef class BestSplitter(BaseDenseSplitter):
         # Return values
         split[0] = best
         n_constant_features[0] = n_total_constants
+
+        # printf("loopcounter = %f\n", loopcounter)
+
         return 0
 
 

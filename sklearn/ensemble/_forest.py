@@ -140,11 +140,13 @@ def _generate_unsampled_indices(random_state, n_samples, n_samples_bootstrap):
 
 def _parallel_build_trees(tree, forest, X, y, sample_weight, tree_idx, n_trees,
                           verbose=0, class_weight=None,
-                          n_samples_bootstrap=None):
+                          n_samples_bootstrap=None, rsdt=0, complete_trees=0):
     """
     Private function used to fit a single tree in parallel."""
     if verbose > 1:
         print("building tree %d of %d" % (tree_idx + 1, n_trees))
+
+    #print("forest.parallel_build_trees: complete_trees = ", complete_trees)
 
     if forest.bootstrap:
         n_samples = X.shape[0]
@@ -167,9 +169,10 @@ def _parallel_build_trees(tree, forest, X, y, sample_weight, tree_idx, n_trees,
             curr_sample_weight *= compute_sample_weight('balanced', y,
                                                         indices=indices)
 
-        tree.fit(X, y, sample_weight=curr_sample_weight, check_input=False)
+
+        tree.fit(X, y, rsdt=rsdt, complete_trees=complete_trees, sample_weight=curr_sample_weight, check_input=False)
     else:
-        tree.fit(X, y, sample_weight=sample_weight, check_input=False)
+        tree.fit(X, y, rsdt, complete_trees=complete_trees, sample_weight=sample_weight, check_input=False)
 
     return tree
 
@@ -271,7 +274,7 @@ class BaseForest(MultiOutputMixin, BaseEnsemble, metaclass=ABCMeta):
 
         return sparse_hstack(indicators).tocsr(), n_nodes_ptr
 
-    def fit(self, X, y, sample_weight=None):
+    def fit(self, X, y, rsdt=0, complete_trees=0, sample_weight=None):
         """
         Build a forest of trees from the training set (X, y).
 
@@ -297,6 +300,11 @@ class BaseForest(MultiOutputMixin, BaseEnsemble, metaclass=ABCMeta):
         -------
         self : object
         """
+
+        complete_trees = self.complete_trees
+
+        #print("forest.baseforest.fit(): complete_trees  = ", complete_trees)
+
         # Validate or convert input data
         if issparse(y):
             raise ValueError(
@@ -306,6 +314,9 @@ class BaseForest(MultiOutputMixin, BaseEnsemble, metaclass=ABCMeta):
                                    accept_sparse="csc", dtype=DTYPE)
         if sample_weight is not None:
             sample_weight = _check_sample_weight(sample_weight, X)
+
+        #print("rsdt=", self.rsdt)
+        #print("complete_trees in forest=", self.complete_trees)
 
         if issparse(X):
             # Pre-sort indices to avoid that each individual tree of the
@@ -387,7 +398,7 @@ class BaseForest(MultiOutputMixin, BaseEnsemble, metaclass=ABCMeta):
                 delayed(_parallel_build_trees)(
                     t, self, X, y, sample_weight, i, len(trees),
                     verbose=self.verbose, class_weight=self.class_weight,
-                    n_samples_bootstrap=n_samples_bootstrap)
+                    n_samples_bootstrap=n_samples_bootstrap, rsdt=rsdt, complete_trees=complete_trees)
                 for i, t in enumerate(trees))
 
             # Collect newly grown trees
@@ -1258,7 +1269,10 @@ class RandomForestClassifier(ForestClassifier):
                  warm_start=False,
                  class_weight=None,
                  ccp_alpha=0.0,
-                 max_samples=None):
+                 max_samples=None,
+                 #ADDED FOR RSD
+                 rsdt=0,
+                 complete_trees=0):
         super().__init__(
             base_estimator=DecisionTreeClassifier(),
             n_estimators=n_estimators,
@@ -1286,6 +1300,8 @@ class RandomForestClassifier(ForestClassifier):
         self.min_impurity_decrease = min_impurity_decrease
         self.min_impurity_split = min_impurity_split
         self.ccp_alpha = ccp_alpha
+        self.rsdt = rsdt
+        self.complete_trees = complete_trees
 
 
 class RandomForestRegressor(ForestRegressor):
@@ -2399,7 +2415,7 @@ class RandomTreesEmbedding(BaseForest):
     def _set_oob_score_and_attributes(self, X, y):
         raise NotImplementedError("OOB score not supported by tree embedding")
 
-    def fit(self, X, y=None, sample_weight=None):
+    def fit(self, X, y=None, rsdt=0, complete_trees=0, sample_weight=None):
         """
         Fit estimator.
 

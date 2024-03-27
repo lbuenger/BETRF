@@ -41,6 +41,7 @@ from ..utils.validation import _deprecate_positional_args
 from ._criterion import Criterion
 from ._splitter import Splitter
 from ._tree import DepthFirstTreeBuilder
+from ._tree import BreadthFirstTreeBuilder
 from ._tree import BestFirstTreeBuilder
 from ._tree import Tree
 from ._tree import _build_pruned_tree_ccp
@@ -141,11 +142,14 @@ class BaseDecisionTree(MultiOutputMixin, BaseEstimator, metaclass=ABCMeta):
         return self.tree_.n_leaves
 
     def fit(self, X, y, sample_weight=None, check_input=True,
-            X_idx_sorted="deprecated"):
+            X_idx_sorted="deprecated", rsdt=0, complete_trees=0):
+
+        #print("classes.fit(): complete_trees = ", complete_trees)
+        #print("random_state = ", self.random_state)
 
         random_state = check_random_state(self.random_state)
 
-        # print("fitting tree")
+        #print("fit() in BaseDT")
 
         if self.ccp_alpha < 0.0:
             raise ValueError("ccp_alpha must be greater than or equal to 0")
@@ -347,7 +351,7 @@ class BaseDecisionTree(MultiOutputMixin, BaseEstimator, metaclass=ABCMeta):
 
         # Build tree
         criterion = self.criterion
-        # print("criterion", criterion)
+        #print("criterion", criterion)
         # print("d", CRITERIA_CLF[self.criterion])
         if not isinstance(criterion, Criterion):
             if is_classification:
@@ -364,13 +368,14 @@ class BaseDecisionTree(MultiOutputMixin, BaseEstimator, metaclass=ABCMeta):
         SPLITTERS = SPARSE_SPLITTERS if issparse(X) else DENSE_SPLITTERS
 
         splitter = self.splitter
-        # print("Initializing splitter", splitter)
+        #print("Initializing splitter", splitter)
         if not isinstance(self.splitter, Splitter):
             splitter = SPLITTERS[self.splitter](criterion,
                                                 self.max_features_,
                                                 min_samples_leaf,
                                                 min_weight_leaf,
-                                                random_state)
+                                                random_state,
+                                                rsdt)
 
         # print("Initializing tree")
         if is_classifier(self):
@@ -384,21 +389,32 @@ class BaseDecisionTree(MultiOutputMixin, BaseEstimator, metaclass=ABCMeta):
 
         # print("Initializing builders")
         # Use BestFirst if max_leaf_nodes given; use DepthFirst otherwise
-        if max_leaf_nodes < 0:
-            builder = DepthFirstTreeBuilder(splitter, min_samples_split,
-                                            min_samples_leaf,
-                                            min_weight_leaf,
-                                            max_depth,
-                                            self.min_impurity_decrease,
-                                            min_impurity_split)
+        #print("complete_trees in classes = ", complete_trees)
+        if complete_trees == 0:
+        #if False:
+            if max_leaf_nodes < 0:
+                builder = DepthFirstTreeBuilder(splitter, min_samples_split,
+                                                min_samples_leaf,
+                                                min_weight_leaf,
+                                                max_depth,
+                                                self.min_impurity_decrease,
+                                                min_impurity_split)
+            else:
+                builder = BestFirstTreeBuilder(splitter, min_samples_split,
+                                               min_samples_leaf,
+                                               min_weight_leaf,
+                                               max_depth,
+                                               max_leaf_nodes,
+                                               self.min_impurity_decrease,
+                                               min_impurity_split)
         else:
-            builder = BestFirstTreeBuilder(splitter, min_samples_split,
+            builder = BreadthFirstTreeBuilder(splitter, min_samples_split,
                                            min_samples_leaf,
                                            min_weight_leaf,
                                            max_depth,
-                                           max_leaf_nodes,
                                            self.min_impurity_decrease,
-                                           min_impurity_split)
+                                           min_impurity_split,
+                                            complete_trees)
 
         # print("Build tree")
         builder.build(self.tree_, X, y, sample_weight)
@@ -857,7 +873,9 @@ class DecisionTreeClassifier(ClassifierMixin, BaseDecisionTree):
                  min_impurity_decrease=0.,
                  min_impurity_split=None,
                  class_weight=None,
-                 ccp_alpha=0.0):
+                 ccp_alpha=0.0,
+                 rsdt=0,
+                 complete_trees=0):
         super().__init__(
             criterion=criterion,
             splitter=splitter,
@@ -872,8 +890,10 @@ class DecisionTreeClassifier(ClassifierMixin, BaseDecisionTree):
             min_impurity_decrease=min_impurity_decrease,
             min_impurity_split=min_impurity_split,
             ccp_alpha=ccp_alpha)
+        self.rsdt=rsdt
+        self.complete_trees=complete_trees
 
-    def fit(self, X, y, sample_weight=None, check_input=True,
+    def fit(self, X, y, rsdt=0, complete_trees=0, sample_weight=None, check_input=True,
             X_idx_sorted="deprecated"):
         """Build a decision tree classifier from the training set (X, y).
 
@@ -910,11 +930,15 @@ class DecisionTreeClassifier(ClassifierMixin, BaseDecisionTree):
             Fitted estimator.
         """
 
+        complete_trees = self.complete_trees
+
         super().fit(
             X, y,
             sample_weight=sample_weight,
             check_input=check_input,
-            X_idx_sorted=X_idx_sorted)
+            X_idx_sorted=X_idx_sorted,
+            rsdt=rsdt,
+            complete_trees=complete_trees)
         return self
 
     def predict_proba(self, X, check_input=True):
@@ -944,6 +968,7 @@ class DecisionTreeClassifier(ClassifierMixin, BaseDecisionTree):
         check_is_fitted(self)
         X = self._validate_X_predict(X, check_input)
         proba = self.tree_.predict(X)
+        # print(proba)
 
         if self.n_outputs_ == 1:
             proba = proba[:, :self.n_classes_]

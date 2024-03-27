@@ -158,6 +158,94 @@ cdef class Stack:
 
 
 # =============================================================================
+# Queue data structure
+# =============================================================================
+
+cdef class Queue:
+    """A FIFO data structure.
+
+    Attributes
+    ----------
+    capacity : SIZE_t
+        The elements the stack can hold; if more added then ``self.stack_``
+        needs to be resized.
+
+    size : SIZE_t
+        The number of elements currently on the stack.
+
+    queue : StackRecord pointer
+        The stack of records (upward in the stack corresponds to the right).
+    """
+
+    def __cinit__(self, SIZE_t capacity):
+        self.capacity = capacity
+        self.size = 0
+        self.queue_ = <QueueRecord*> malloc(capacity * sizeof(QueueRecord))
+
+    def __dealloc__(self):
+        free(self.queue_)
+
+    cdef bint is_empty(self) nogil:
+        return self.size <= 0
+
+    cdef int enqueue(self, SIZE_t start, SIZE_t end, SIZE_t depth, SIZE_t parent,
+                  bint is_left, double impurity,
+                  SIZE_t n_constant_features, bint is_placeholder, SIZE_t placeholder_depth) nogil except -1:
+        """Push a new element onto the queue.
+
+        Return -1 in case of failure to allocate memory (and raise MemoryError)
+        or 0 otherwise.
+        """
+        cdef SIZE_t size = self.size
+        cdef QueueRecord* queue = NULL
+
+        # Resize if capacity not sufficient
+        if size >= self.capacity:
+            self.capacity *= 2
+            # Since safe_realloc can raise MemoryError, use `except -1`
+            safe_realloc(&self.queue_, self.capacity)
+
+        queue = self.queue_
+        queue[size].start = start
+        queue[size].end = end
+        queue[size].depth = depth
+        queue[size].parent = parent
+        queue[size].is_left = is_left
+        queue[size].impurity = impurity
+        queue[size].n_constant_features = n_constant_features
+        queue[size].is_placeholder = is_placeholder
+        queue[size].placeholder_depth = placeholder_depth
+
+        # Increment stack pointer
+        self.size = size + 1
+        return 0
+
+    cdef int dequeue(self, QueueRecord* res) nogil:
+        """Remove the first element from the queue and copy to ``res``.
+
+        Returns 0 if dequeue was successful (and ``res`` is set); -1
+        otherwise.
+        """
+        cdef SIZE_t size = self.size
+        cdef QueueRecord* queue = self.queue_
+
+        if size <= 0:
+            return -1
+
+        res[0] = queue[0]
+
+        cdef SIZE_t i = 1
+        while i < size:
+            queue[i-1] = queue[i]
+            i = i+1
+
+        self.size = size - 1
+
+        return 0
+
+
+
+# =============================================================================
 # PriorityHeap data structure
 # =============================================================================
 

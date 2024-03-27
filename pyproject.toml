@@ -13,3 +13,8 @@ requires = [
 
     "scipy>=0.19.1",
 ]
+[project]
+name = "my_package"
+version = "0.1.0"
+[tool.setuptools]
+py-modules = []

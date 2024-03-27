@@ -26,6 +26,10 @@ from ._splitter cimport SplitRecord
 cdef struct Node:
     # Base storage structure for the nodes in a Tree object
 
+    #Added for complete trees
+    SIZE_t node_id                       # id of the node itself
+    bint is_leaf                         # if the node is a leaf
+
     SIZE_t left_child                    # id of the left child of the node
     SIZE_t right_child                   # id of the right child of the node
     SIZE_t feature                       # Feature used for splitting the node
@@ -78,6 +82,9 @@ cdef class Tree:
     cdef public list splitvals
     # cdef SIZE_t* npsplitvals
 
+    # Added by me
+    cdef public bint complete_tree
+
     # Methods
     cdef SIZE_t _add_node(self, SIZE_t parent, bint is_left, bint is_leaf,
                           SIZE_t feature, double threshold, double impurity,
@@ -124,6 +131,7 @@ cdef class TreeBuilder:
     cdef SIZE_t max_depth               # Maximal tree depth
     cdef double min_impurity_split
     cdef double min_impurity_decrease   # Impurity threshold for early stopping
+    cdef bint complete_tree
 
     cpdef build(self, Tree tree, object X, np.ndarray y,
                 np.ndarray sample_weight=*)

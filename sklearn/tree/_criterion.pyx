@@ -16,6 +16,7 @@
 #
 # License: BSD 3 clause
 
+from libc.stdio cimport printf
 from libc.stdlib cimport calloc
 from libc.stdlib cimport free
 from libc.string cimport memcpy
@@ -140,6 +141,24 @@ cdef class Criterion:
         """
         pass
 
+    cdef void switched_children_impurity(self, double* impurity_left, double* impurity_right, SIZE_t left, SIZE_t mid, SIZE_t right) nogil:
+        """Placeholder for calculating the impurity of children.
+
+            Placeholder for a method which evaluates the impurity in
+            children nodes, i.e. the impurity of samples[start:pos] + the impurity
+            of samples[pos:end].
+
+            Parameters
+            ----------
+            impurity_left : double pointer
+                The memory address where the impurity of the left child should be
+                stored.
+            impurity_right : double pointer
+                The memory address where the impurity of the right child should be
+                stored
+            """
+        pass
+
     cdef void node_value(self, double* dest) nogil:
         """Placeholder for storing the node value.
 
@@ -168,8 +187,23 @@ cdef class Criterion:
         cdef double impurity_right
         self.children_impurity(&impurity_left, &impurity_right)
 
+        # printf("Does this get called?\n")
+
         return (- self.weighted_n_right * impurity_right
                 - self.weighted_n_left * impurity_left)
+
+    cdef double switched_proxy_impurity_improvement(self, SIZE_t left, SIZE_t mid, SIZE_t right) nogil:
+        cdef double impurity_left
+        cdef double impurity_right
+        self.switched_children_impurity(&impurity_left, &impurity_right, left, mid, right)
+
+
+        # printf("Does this get called?\n")
+
+        return (- self.weighted_n_right * impurity_right
+                - self.weighted_n_left * impurity_left)
+
+
 
     cdef double impurity_improvement(self, double impurity_parent,
                                      double impurity_left,
@@ -584,6 +618,87 @@ cdef class Entropy(ClassificationCriterion):
         impurity_left[0] = entropy_left / self.n_outputs
         impurity_right[0] = entropy_right / self.n_outputs
 
+    cdef void switched_children_impurity(self,
+                                           double* impurity_left,
+                                           double* impurity_right,
+                                           SIZE_t left,
+                                           SIZE_t mid,
+                                           SIZE_t right) nogil:
+
+        cdef SIZE_t * n_classes = self.n_classes
+        cdef double * sum_left = self.sum_left
+        cdef double * sum_right = self.sum_right
+        cdef double entropy_left = 0.0
+        cdef double entropy_right = 0.0
+        cdef double * count_left
+        cdef double * weight_left
+        cdef double * count_right
+        cdef double * weight_right
+        cdef double count_k
+        cdef SIZE_t k
+        cdef SIZE_t c
+
+        self.reset()
+        self.update(left)
+        for k in range(self.n_outputs):
+            for c in range(n_classes[k]):
+                count_k = sum_left[c]
+                if count_k > 0.0:
+                    count_left[c] = count_k
+                    weight_left[c] = self.weighted_n_left
+                    # count_k /= self.weighted_n_left
+                    # entropy_left -= count_k * log(count_k)
+            # sum_left += self.sum_stride
+            # sum_right += self.sum_stride
+
+        self.reset()
+        self.update(right)
+        for k in range(self.n_outputs):
+            for c in range(n_classes[k]):
+                count_k = sum_right[c]
+                if count_k > 0.0:
+                    count_right[c] = count_k
+                    weight_right[c] = self.weighted_n_right
+                    # count_k /= self.weighted_n_right
+                    # entropy_right -= count_k * log(count_k)
+            # sum_left += self.sum_stride
+            # sum_right += self.sum_stride
+
+        self.reset()
+        self.update(mid)
+        for k in range(self.n_outputs):
+            for c in range(n_classes[k]):
+                count_k = sum_left[c]
+                if count_k > 0.0:
+                    count_right[c] += count_k - count_left[c]
+                    weight_right[c] += self.weighted_n_left - weight_left[c]
+                    # count_k /= self.weighted_n_left
+                    # entropy_left -= count_k * log(count_k)
+                count_k = sum_right[c]
+                if count_k > 0.0:
+                    count_left[c] += count_k - count_right[c]
+                    weight_left[c] += self.weighted_n_right - weight_right[c]
+                    # count_k /= self.weighted_n_right
+                    # entropy_right -= count_k * log(count_k)
+            sum_left += self.sum_stride
+            sum_right += self.sum_stride
+
+        for k in range(self.n_outputs):
+            for c in range(n_classes[k]):
+                count_k = count_left[c]
+                count_k /= weight_left[c]
+                entropy_left -= count_k * log(count_k)
+                count_k = count_right[c]
+                count_k /= weight_right[c]
+                entropy_right -= count_k * log(count_k)
+
+
+
+        impurity_left[0] = entropy_left / self.n_outputs
+        impurity_right[0] = entropy_right / self.n_outputs
+
+        self.reset()
+
 
 cdef class Gini(ClassificationCriterion):
     r"""Gini Index impurity criterion.
@@ -721,6 +836,9 @@ cdef class RegressionCriterion(Criterion):
             The total number of samples to fit on
         """
         # Default values
+
+        # printf("Does this cinit get executed?")
+
         self.sample_weight = NULL
 
         self.samples = NULL
@@ -789,7 +907,7 @@ cdef class RegressionCriterion(Criterion):
 
             if sample_weight != NULL:
                 w = sample_weight[i]
-
+            # printf("Does this get executed?")
             for k in range(self.n_outputs):
                 y_ik = self.y[i, k]
                 w_y_ik = w * y_ik
@@ -942,6 +1060,9 @@ cdef class MSE(RegressionCriterion):
 
         return (proxy_impurity_left / self.weighted_n_left +
                 proxy_impurity_right / self.weighted_n_right)
+
+    cdef double switched_proxy_impurity_improvement(self, SIZE_t left, SIZE_t mid, SIZE_t right) nogil:
+        return 2
 
     cdef void children_impurity(self, double* impurity_left,
                                 double* impurity_right) nogil:
@@ -1328,6 +1449,9 @@ cdef class FriedmanMSE(MSE):
 
         return diff * diff / (self.weighted_n_left * self.weighted_n_right)
 
+    cdef double switched_proxy_impurity_improvement(self, SIZE_t left, SIZE_t mid, SIZE_t right) nogil:
+        return 3
+
     cdef double impurity_improvement(self, double impurity_parent, double
                                      impurity_left, double impurity_right) nogil:
         # Note: none of the arguments are used here
@@ -1418,6 +1542,9 @@ cdef class Poisson(RegressionCriterion):
                 proxy_impurity_right -= y_mean_right * log(y_mean_right)
 
         return - proxy_impurity_left - proxy_impurity_right
+
+    cdef double switched_proxy_impurity_improvement(self, SIZE_t left, SIZE_t mid, SIZE_t right) nogil:
+        return 4
 
     cdef void children_impurity(self, double* impurity_left,
                                 double* impurity_right) nogil:

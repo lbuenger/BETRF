@@ -37,6 +37,11 @@ cdef class Splitter:
     #
     # The impurity computations are delegated to a criterion object.
 
+    # ADDED FOR THESIS
+    # Robust Split Decisions
+    cdef public DTYPE_t rsdt                # Threshold for robust split decisions
+    cdef DTYPE_t* feature_ranges     # Value ranges of features to compute rsdt with
+
     # Internal structures
     cdef public Criterion criterion      # Impurity criterion
     cdef public SIZE_t max_features      # Number of features to test
