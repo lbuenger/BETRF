@@ -564,6 +564,8 @@ def _accumulate_prediction(predict, X, out, lock):
     complains that it cannot pickle it when placed there.
     """
     prediction = predict(X, check_input=False)
+    #print(prediction)
+    #print(out[0])
     with lock:
         if len(out) == 1:
             out[0] += prediction
@@ -775,6 +777,9 @@ class ForestClassifier(ClassifierMixin, BaseForest, metaclass=ABCMeta):
         n_jobs, _, _ = _partition_estimators(self.n_estimators, self.n_jobs)
 
         # avoid storing the output of every estimator by summing them here
+        # Hier +1 machen hilft nur bei einem...
+        #self.n_classes_ = self.n_classes_ + 1
+        print("self.n_classes: ", self.n_classes_)
         all_proba = [np.zeros((X.shape[0], j), dtype=np.float64)
                      for j in np.atleast_1d(self.n_classes_)]
         lock = threading.Lock()

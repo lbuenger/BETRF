@@ -148,7 +148,7 @@ cdef class DepthFirstTreeBuilder(TreeBuilder):
                 np.ndarray sample_weight=None):
         """Build a decision tree from the training set (X, y)."""
 
-        #print("in build() of _tree.pyx in DepthFirstTreeBuilder")
+        print("in build() of _tree.pyx in DepthFirstTreeBuilder")
 
         # check input
         X, y, sample_weight = self._check_input(X, y, sample_weight)
@@ -285,14 +285,173 @@ cdef class DepthFirstTreeBuilder(TreeBuilder):
             raise MemoryError()
 
 
-# Breadth first builder ----------------------------------------------------------
+
+# Breadth first builder ---------------------------------------------------------
+
 cdef class BreadthFirstTreeBuilder(TreeBuilder):
     """Build a decision tree in breadth-first fashion."""
 
     def __cinit__(self, Splitter splitter, SIZE_t min_samples_split,
                   SIZE_t min_samples_leaf, double min_weight_leaf,
                   SIZE_t max_depth, double min_impurity_decrease,
-                  double min_impurity_split, complete_tree):
+                  double min_impurity_split, SIZE_t complete_tree):
+        self.splitter = splitter
+        self.min_samples_split = min_samples_split
+        self.min_samples_leaf = min_samples_leaf
+        self.min_weight_leaf = min_weight_leaf
+        self.max_depth = max_depth
+        self.min_impurity_decrease = min_impurity_decrease
+        self.min_impurity_split = min_impurity_split
+
+    cpdef build(self, Tree tree, object X, np.ndarray y,
+                np.ndarray sample_weight=None):
+        """Build a decision tree from the training set (X, y)."""
+
+        print("in build() of _tree.pyx in DepthFirstTreeBuilder")
+
+        # check input
+        X, y, sample_weight = self._check_input(X, y, sample_weight)
+
+        cdef DOUBLE_t* sample_weight_ptr = NULL
+        if sample_weight is not None:
+            sample_weight_ptr = <DOUBLE_t*> sample_weight.data
+
+        # Initial capacity
+        cdef int init_capacity
+
+        if tree.max_depth <= 10:
+            init_capacity = (2 ** (tree.max_depth + 1)) - 1
+        else:
+            init_capacity = 2047
+
+        tree._resize(init_capacity)
+
+        # Parameters
+        cdef Splitter splitter = self.splitter
+        cdef SIZE_t max_depth = self.max_depth
+        cdef SIZE_t min_samples_leaf = self.min_samples_leaf
+        cdef double min_weight_leaf = self.min_weight_leaf
+        cdef SIZE_t min_samples_split = self.min_samples_split
+        cdef double min_impurity_decrease = self.min_impurity_decrease
+        cdef double min_impurity_split = self.min_impurity_split
+
+        # Recursive partition (without actual recursion)
+        splitter.init(X, y, sample_weight_ptr)
+
+        # print("init splitter in _tree.pyx")
+
+        cdef SIZE_t start
+        cdef SIZE_t end
+        cdef SIZE_t depth
+        cdef SIZE_t parent
+        cdef bint is_left
+        cdef SIZE_t n_node_samples = splitter.n_samples
+        cdef double weighted_n_samples = splitter.weighted_n_samples
+        cdef double weighted_n_node_samples
+        cdef SplitRecord split
+        cdef SIZE_t node_id
+
+        cdef double impurity = INFINITY
+        cdef SIZE_t n_constant_features
+        cdef bint is_leaf
+        cdef bint first = 1
+        cdef SIZE_t max_depth_seen = -1
+        cdef int rc = 0
+
+        cdef Queue queue = Queue(INITIAL_STACK_SIZE)
+        cdef QueueRecord queue_record
+
+        with nogil:
+            # push root node onto stack
+            rc = queue.enqueue(0, n_node_samples, 0, _TREE_UNDEFINED, 0, INFINITY, 0, 0, 0)
+            if rc == -1:
+                # got return code -1 - out-of-memory
+                with gil:
+                    raise MemoryError()
+
+            while not queue.is_empty():
+                queue.dequeue(&queue_record)
+
+                start = queue_record.start
+                end = queue_record.end
+                depth = queue_record.depth
+                parent = queue_record.parent
+                is_left = queue_record.is_left
+                impurity = queue_record.impurity
+                n_constant_features = queue_record.n_constant_features
+
+                n_node_samples = end - start
+                splitter.node_reset(start, end, &weighted_n_node_samples)
+
+                is_leaf = (depth >= max_depth or
+                           n_node_samples < min_samples_split or
+                           n_node_samples < 2 * min_samples_leaf or
+                           weighted_n_node_samples < 2 * min_weight_leaf)
+
+                # call splitter
+                # print("call splitter in _tree.pyx")
+                # print("This loop may be called many times.pyx")
+                if first:
+                    impurity = splitter.node_impurity()
+                    first = 0
+
+                is_leaf = (is_leaf or
+                           (impurity <= min_impurity_split))
+
+                if not is_leaf:
+                    splitter.node_split(impurity, &split, &n_constant_features)
+                    # If EPSILON=0 in the below comparison, float precision
+                    # issues stop splitting, producing trees that are
+                    # dissimilar to v0.18
+                    is_leaf = (is_leaf or split.pos >= end or
+                               (split.improvement + EPSILON <
+                                min_impurity_decrease))
+
+                node_id = tree._add_node(parent, is_left, is_leaf, split.feature,
+                                         split.threshold, impurity, n_node_samples,
+                                         weighted_n_node_samples)
+
+                if node_id == SIZE_MAX:
+                    rc = -1
+                    break
+
+                # Store value for all nodes, to facilitate tree/model
+                # inspection and interpretation
+                splitter.node_value(tree.value + node_id * tree.value_stride)
+
+                if not is_leaf:
+                    # Push right child on stack
+                    rc = queue.enqueue(split.pos, end, depth + 1, node_id, 0,
+                                    split.impurity_right, n_constant_features, 0, 0)
+                    if rc == -1:
+                        break
+
+                    # Push left child on stack
+                    rc = queue.enqueue(start, split.pos, depth + 1, node_id, 1,
+                                    split.impurity_left, n_constant_features, 0, 0)
+                    if rc == -1:
+                        break
+
+                if depth > max_depth_seen:
+                    max_depth_seen = depth
+
+            if rc >= 0:
+                rc = tree._resize_c(tree.node_count)
+
+            if rc >= 0:
+                tree.max_depth = max_depth_seen
+        if rc == -1:
+            raise MemoryError()
+
+
+# Complete robust tree builder ----------------------------------------------------------
+cdef class CompleteRobustTreeBuilder(TreeBuilder):
+    """Build a complete robust decision tree in breadth-first fashion."""
+
+    def __cinit__(self, Splitter splitter, SIZE_t min_samples_split,
+                  SIZE_t min_samples_leaf, double min_weight_leaf,
+                  SIZE_t max_depth, double min_impurity_decrease,
+                  double min_impurity_split, SIZE_t complete_tree):
         self.splitter = splitter
         self.min_samples_split = min_samples_split
         self.min_samples_leaf = min_samples_leaf
@@ -306,7 +465,7 @@ cdef class BreadthFirstTreeBuilder(TreeBuilder):
                 np.ndarray sample_weight=None):
         """Build a decision tree from the training set (X, y)."""
 
-        #print("in build() of _tree.pyx in BreadthFirstTreeBuilder")
+        print("in build() of _tree.pyx in CompleteRobustTreeBuilder")
 
         tree.complete_tree = self.complete_tree
 
@@ -373,6 +532,8 @@ cdef class BreadthFirstTreeBuilder(TreeBuilder):
         cdef Queue queue = Queue(INITIAL_STACK_SIZE)
         cdef QueueRecord queue_record
 
+        cdef bint log_building = False
+
         with nogil:
             # push root node onto queue
             rc = queue.enqueue(0, n_node_samples, 0, _TREE_UNDEFINED, 0, INFINITY, 0, is_placeholder, placeholder_depth)
@@ -426,12 +587,13 @@ cdef class BreadthFirstTreeBuilder(TreeBuilder):
                                                  tree_features[0], tree_thresholds[0], tree_impurities[0],
                                                  tree_node_n_samples[0], tree_weighted_node_n_samples[0])
                         #printf("placeholder %d added, duplicate of root, depth = %d, placeholder_depth = %d\n", node_id, depth, placeholder_depth)
-                        printf("%d, root copy,\tdepth: %d, placeholder_depth: %d, is_leaf: %d\n", node_id, depth, placeholder_depth, 0)
+                        if log_building:
+                            printf("%d, root copy,\t\tdepth: %d, placeholder_depth: %d, is_leaf: %d\n", node_id, depth, placeholder_depth, 0)
 
                         #Copy tree value from node to duplicate
                         p_d = 0
                         while p_d < tree.value_stride:
-                            tree.value[node_id * tree.value_stride + p_d] = tree.value[0 * tree.value_stride + p_d]
+                            #tree.value[node_id * tree.value_stride + p_d] = tree.value[0 * tree.value_stride + p_d]
                             #printf("duplicated tree.value from root: %d, %d\n", tree.value[node_id * tree.value_stride + p_d], tree.value[0 * tree.value_stride + p_d])
                             p_d = p_d + 1
 
@@ -449,12 +611,13 @@ cdef class BreadthFirstTreeBuilder(TreeBuilder):
                         node_id = tree._add_node(parent, is_left, is_leaf, split.feature,
                                                  split.threshold, impurity, n_node_samples,
                                                  weighted_n_node_samples)
-                        if is_leaf:
-                            #printf("leaf %d added, depth = %d, placeholder_depth = %d\n", node_id, depth, placeholder_depth)
-                            printf("%d, leaf,\tdepth: %d, placeholder_depth: %d, is_leaf: %d\n", node_id, depth, placeholder_depth, is_leaf)
-                        else:
-                            #printf("node %d added, depth = %d, placeholder_depth = %d\n", node_id, depth, placeholder_depth)
-                            printf("%d, node,\tdepth: %d, placeholder_depth: %d, is_leaf: %d\n", node_id, depth, placeholder_depth, is_leaf)
+                        if log_building:
+                            if is_leaf:
+                                #printf("leaf %d added, depth = %d, placeholder_depth = %d\n", node_id, depth, placeholder_depth)
+                                printf("%d, leaf,\t\tdepth: %d, placeholder_depth: %d, is_leaf: %d\n", node_id, depth, placeholder_depth, is_leaf)
+                            else:
+                                #printf("node %d added, depth = %d, placeholder_depth = %d\n", node_id, depth, placeholder_depth)
+                                printf("%d, node,\t\tdepth: %d, placeholder_depth: %d, is_leaf: %d\n", node_id, depth, placeholder_depth, is_leaf)
 
 
                     #Add parameters of node to duplicate later
@@ -512,151 +675,182 @@ cdef class BreadthFirstTreeBuilder(TreeBuilder):
                         if rc == -1:
                             break
                 else:
-                # Node is a placeholder
+                # Node is a duplicate
 
-                    # Check if "on the right path", place dummy node else
-
-                    p_d = depth - placeholder_depth - 1
-                    p = parent
-
-                    while p_d > 0:
-                        p = int((p - 1) / 2)
-                        p_d = p_d - 1
-
-                    is_placeholder = is_placeholder or (p % 2 != is_left)
-
-                    #Check if node is dummy node
-                    #if False:
                     if is_placeholder:
-                    # Node is a dummy, add dummy node to tree and let following nodes also be dummy
+                    # Node is placeholder, simply copy parent
                         is_leaf = True
-                        node_id = tree._add_node(parent, is_left, is_leaf, 0, 0, 0, 0, 0)
-                        printf("%d, dummy node,\tdepth: %d, placeholder_depth: %d, is_leaf: %d, parent: %d\n", node_id, depth, placeholder_depth, is_leaf, parent)
-                        #printf("%d, p: %d, p2: %d, is_left: %d\n", node_id, p, p%2, is_left)
+                        node_id = tree._add_node(parent, is_left, is_leaf,
+                                                 tree_features[parent], tree_thresholds[parent],
+                                                 tree_impurities[parent],
+                                                 tree_node_n_samples[parent], tree_weighted_node_n_samples[parent])
+                        if log_building:
+                            printf("%d, dummy parent copy,\tdepth: %d, placeholder_depth: %d, is_leaf: %d, parent: %d\n", node_id,
+                                   depth, placeholder_depth, is_leaf, parent)
+                        #Duplicate value of node from parent
+                        p_d = 0
+                        while p_d < tree.value_stride:
+                            tree.value[node_id * tree.value_stride + p_d] = tree.value[parent * tree.value_stride + p_d]
+                            p_d = p_d + 1
+                    else:
 
+                        # Check if "on the right path", place dummy node else
 
-
-
-
-                    #printf("p: %d, p2: %d, is_left: %d\n", p, p%2, is_left)
-                    #if p%2 != is_left:
-                    # Node is not on correct path, create dummy node
-                        #node_id = tree._add_node(_TREE_UNDEFINED, 0, 1, 0, 0, 0, 0, 0)
-                        #printf("dummy node %d added, depth = %d, placeholder_depth = %d\n", node_id, depth, placeholder_depth)
-
-
-                    #    printf("  CORRECT: ")
-                    #else:
-                    #    printf("INCORRECT: ")
-
-
-
-
-
-                    # Check if leaf has to be placed, node has to be copied or dummy node has to be placed based on
-                    # placeholder_depth
-
-                    #is_leaf = (depth >= max_depth and depth == placeholder_depth*2)
-
-
-                    # Node is no dummy node, copy nodes as usual
-
-                    elif (depth >= max_depth and placeholder_depth*2 < depth):
-                    # Max depth reached, copy leaf even though duplicate nodes would still be available
-
-                        #Search for node_id of node to get duplicated based on placeholder_depth
-                        p_d = placeholder_depth - 1
+                        p_d = depth - placeholder_depth - 1
                         p = parent
-                        #while p_d > 0:
-                        #    p = int((p-1)/2)
-                        #    p_d = p_d - 1
+
                         while p_d > 0:
                             p = int((p - 1) / 2)
                             p_d = p_d - 1
 
-                        is_leaf = True
+                        #if False:
+                        is_placeholder = is_placeholder or (p % 2 != is_left)
+                        if is_placeholder:
+                        # Node is a dummy, add dummy error node to tree and let following nodes also be dummy
+                            is_leaf = True
+                            is_placeholder = True
 
-                        node_id = tree._add_node(parent, is_left, is_leaf,
-                                                 tree_features[p], tree_thresholds[p], tree_impurities[p],
-                                                 tree_node_n_samples[p], tree_weighted_node_n_samples[p])
-                        #printf("actual leaf %d added, duplicates = %d, depth = %d, placeholder_depth = %d\n", node_id, p, depth, placeholder_depth)
-                        printf("%d, leaf copy,\tdepth: %d, placeholder_depth: %d, is_leaf: %d, duplicates: %d, max depth reached\n", node_id,
-                               depth, placeholder_depth, is_leaf, p)
+                            node_id = tree._add_node(parent, is_left, is_leaf, 0, 0, 0, 0, 0)
+                            if log_building:
+                                printf("%d, dummy error node,\tdepth: %d, placeholder_depth: %d, is_leaf: %d, parent: %d\n", node_id, depth, placeholder_depth, is_leaf, parent)
+                            #printf("%d, p: %d, p2: %d, is_left: %d\n", node_id, p, p%2, is_left)
 
-                        #Duplicate value of node from duplicated node and also value from root into duplicate
-                        p_d = 0
-                        while p_d < tree.value_stride:
-                            tree.value[node_id * tree.value_stride + p_d] = tree.value[p * tree.value_stride + p_d]
-                            tree.value[p * tree.value_stride + p_d] = tree.value[0 * tree.value_stride + p_d]
-                            p_d = p_d + 1
+                            #Let value of error node be error class
+                            tree.value[node_id * tree.value_stride + tree.value_stride-1] = 1
 
-                    elif placeholder_depth*2 == depth:
-                    # Ran out of nodes ot copy, place copy of leaf here
 
-                        #Search for node_id of node to get duplicated based on placeholder_depth
-                        p_d = placeholder_depth
-                        p = parent
-                        #while p_d > 0:
-                        #    p = int((p-1)/2)
-                        #    p_d = p_d - 1
-                        while p > 2 ** (placeholder_depth+1) - 2:
-                            p = int((p-1)/2)
 
-                        is_leaf = True
+                        #printf("p: %d, p2: %d, is_left: %d\n", p, p%2, is_left)
+                        #if p%2 != is_left:
+                        # Node is not on correct path, create dummy node
+                            #node_id = tree._add_node(_TREE_UNDEFINED, 0, 1, 0, 0, 0, 0, 0)
+                            #printf("dummy node %d added, depth = %d, placeholder_depth = %d\n", node_id, depth, placeholder_depth)
 
-                        node_id = tree._add_node(parent, is_left, is_leaf,
-                                                 tree_features[p], tree_thresholds[p], tree_impurities[p],
-                                                 tree_node_n_samples[p], tree_weighted_node_n_samples[p])
-                        #printf("actual leaf %d added, duplicates = %d, depth = %d, placeholder_depth = %d\n", node_id, p, depth, placeholder_depth)
-                        printf("%d, leaf copy,\tdepth: %d, placeholder_depth: %d, is_leaf: %d, duplicates: %d, no duplicates\n", node_id, depth, placeholder_depth, is_leaf, p)
 
-                        #Duplicate value of node from duplicated node and also value from root into duplicate
-                        p_d = 0
-                        while p_d < tree.value_stride:
-                            tree.value[node_id * tree.value_stride + p_d] = tree.value[p * tree.value_stride + p_d]
-                            tree.value[p * tree.value_stride + p_d] = tree.value[0 * tree.value_stride + p_d]
-                            p_d = p_d + 1
+                        #    printf("  CORRECT: ")
+                        #else:
+                        #    printf("INCORRECT: ")
 
-                    elif placeholder_depth * 2 < depth:
-                    #Not at max depth and still nodes for copying available
 
-                        #Search for node_id of node to get duplicated based on duplacte_depth
-                        p_d = placeholder_depth
-                        p = parent
-                        #while p_d > 0:
-                        #    p = int((p-1)/2)
-                        #    p_d = p_d - 1
-                        while p > 2 ** (placeholder_depth+1) - 2:
-                            p = int((p-1)/2)
 
-                        is_leaf = False
 
-                        node_id = tree._add_node(parent, is_left, is_leaf,
-                                                 tree_features[p], tree_thresholds[p], tree_impurities[p],
-                                                 tree_node_n_samples[p], tree_weighted_node_n_samples[p])
-                        #printf("placeholder %d added, duplicates = %d, depth = %d, placeholder_depth = %d\n", node_id, p, depth, placeholder_depth)
-                        printf("%d, duplicate,\tdepth: %d, placeholder_depth: %d, is_leaf: %d, duplicates: %d, parent: %d\n", node_id, depth, placeholder_depth, is_leaf, p, parent)
 
-                        #Duplicate value of node from duplicated node
-                        p_d = 0
-                        while p_d < tree.value_stride:
-                            tree.value[node_id*tree.value_stride + p_d] = tree.value[p*tree.value_stride + p_d]
-                            p_d = p_d + 1
+                        # Check if leaf has to be placed, node has to be copied or dummy node has to be placed based on
+                        # placeholder_depth
 
-                        #with gil:
-                        #    print(tree.value[node_id])
-                        #    print(tree.value[p])
+                        #is_leaf = (depth >= max_depth and depth == placeholder_depth*2)
 
-                        #printf("node %d added, placeholder = %d, placeholder depth = %d\n", node_id, is_placeholder, placeholder_depth)
-                        #splitter.node_value(tree.value + node_id * tree.value_stride)
-                    else:
-                        #No more nodes to copy available and leaf already placed, place dummy nodes instead
-                        is_placeholder = True
-                        is_leaf = True
 
-                        #Add dummy node
-                        node_id = tree._add_node(parent, is_left, is_leaf, 0,0, 0, 0,0)
-                        printf("%d, dummy node,\tdepth: %d, placeholder_depth: %d, is_leaf: %d\n", node_id, depth, placeholder_depth, is_leaf)
+                        # Node is no dummy node, copy nodes as usual
+
+                        elif (depth >= max_depth and placeholder_depth*2 < depth):
+                        # Max depth reached and nodes for duplicate still available, copy leaf nonetheless
+
+                            #Search for node_id of node to get duplicated based on placeholder_depth
+                            p_d = placeholder_depth - 1
+                            p = parent
+                            #while p_d > 0:
+                            #    p = int((p-1)/2)
+                            #    p_d = p_d - 1
+                            while p_d > 0:
+                                p = int((p - 1) / 2)
+                                p_d = p_d - 1
+
+                            is_leaf = True
+                            is_placeholder = True
+
+                            node_id = tree._add_node(parent, is_left, is_leaf,
+                                                     tree_features[p], tree_thresholds[p], tree_impurities[p],
+                                                     tree_node_n_samples[p], tree_weighted_node_n_samples[p])
+                            #printf("actual leaf %d added, duplicates = %d, depth = %d, placeholder_depth = %d\n", node_id, p, depth, placeholder_depth)
+                            if log_building:
+                                printf("%d, leaf copy,\t\tdepth: %d, placeholder_depth: %d, is_leaf: %d, duplicates: %d, max depth reached\n", node_id,
+                                   depth, placeholder_depth, is_leaf, p)
+
+                            #Duplicate value from actual leaf into duplicated leaf and also value from root into duplicated root
+                            p_d = 0
+                            while p_d < tree.value_stride:
+                                tree.value[node_id * tree.value_stride + p_d] = tree.value[p * tree.value_stride + p_d]
+                                tree.value[p * tree.value_stride + p_d] = tree.value[0 * tree.value_stride + p_d]
+                                p_d = p_d + 1
+
+                        elif placeholder_depth*2 == depth:
+                        # Ran out of nodes to copy, place copy of leaf here
+
+                            #Search for node_id of node to get duplicated based on placeholder_depth
+                            p_d = placeholder_depth
+                            p = parent
+                            #while p_d > 0:
+                            #    p = int((p-1)/2)
+                            #    p_d = p_d - 1
+                            while p > 2 ** (placeholder_depth+1) - 2:
+                                p = int((p-1)/2)
+
+                            is_leaf = True
+                            is_placeholder = True
+
+                            node_id = tree._add_node(parent, is_left, is_leaf,
+                                                     tree_features[p], tree_thresholds[p], tree_impurities[p],
+                                                     tree_node_n_samples[p], tree_weighted_node_n_samples[p])
+                            #printf("actual leaf %d added, duplicates = %d, depth = %d, placeholder_depth = %d\n", node_id, p, depth, placeholder_depth)
+                            if log_building:
+                                printf("%d, leaf copy,\t\tdepth: %d, placeholder_depth: %d, is_leaf: %d, duplicates: %d, no duplicates\n", node_id, depth, placeholder_depth, is_leaf, p)
+
+                            #Duplicate value of node from duplicated node and also value from root into duplicate
+                            p_d = 0
+                            while p_d < tree.value_stride:
+                                tree.value[node_id * tree.value_stride + p_d] = tree.value[p * tree.value_stride + p_d]
+                                tree.value[p * tree.value_stride + p_d] = tree.value[0 * tree.value_stride + p_d]
+                                p_d = p_d + 1
+
+                        elif placeholder_depth * 2 < depth:
+                        #Not at max depth and still nodes for copying available
+
+                            #Search for node_id of node to get duplicated based on duplacte_depth
+                            p_d = placeholder_depth
+                            p = parent
+                            #while p_d > 0:
+                            #    p = int((p-1)/2)
+                            #    p_d = p_d - 1
+                            while p > 2 ** (placeholder_depth+1) - 2:
+                                p = int((p-1)/2)
+
+                            is_leaf = False
+
+                            node_id = tree._add_node(parent, is_left, is_leaf,
+                                                     tree_features[p], tree_thresholds[p], tree_impurities[p],
+                                                     tree_node_n_samples[p], tree_weighted_node_n_samples[p])
+                            #printf("placeholder %d added, duplicates = %d, depth = %d, placeholder_depth = %d\n", node_id, p, depth, placeholder_depth)
+                            if log_building:
+                                printf("%d, duplicate,\t\tdepth: %d, placeholder_depth: %d, is_leaf: %d, duplicates: %d, parent: %d\n", node_id, depth, placeholder_depth, is_leaf, p, parent)
+
+                            #Duplicate value of node from duplicated node
+                            p_d = 0
+                            while p_d < tree.value_stride:
+                                tree.value[node_id*tree.value_stride + p_d] = tree.value[p*tree.value_stride + p_d]
+                                p_d = p_d + 1
+
+                            #with gil:
+                            #    print(tree.value[node_id])
+                            #    print(tree.value[p])
+
+                            #printf("node %d added, placeholder = %d, placeholder depth = %d\n", node_id, is_placeholder, placeholder_depth)
+                            #splitter.node_value(tree.value + node_id * tree.value_stride)
+                        else:
+                            #No more nodes to copy available and leaf already placed, place dummy nodes instead
+                            is_placeholder = True
+                            is_leaf = True
+
+                            #Add dummy node
+                            node_id = tree._add_node(parent, is_left, is_leaf, 0,0, 0, 0,0)
+                            if log_building:
+                                printf("%d, parent copy node,\tdepth: %d, placeholder_depth: %d, is_leaf: %d\n", node_id, depth, placeholder_depth, is_leaf)
+
+                            #Duplicate value of node from parent
+                            p_d = 0
+                            while p_d < tree.value_stride:
+                                tree.value[node_id * tree.value_stride + p_d] = tree.value[parent * tree.value_stride + p_d]
+                                p_d = p_d + 1
 
 
                     if depth<max_depth:
@@ -685,8 +879,8 @@ cdef class BreadthFirstTreeBuilder(TreeBuilder):
                 tree.max_depth = max_depth_seen
 
             # Extra node for error return
-            node_id = tree._add_node(_TREE_UNDEFINED, 0, 1, 0,0, 0, 0,0)
-            printf("empty node %d added\n", node_id)
+            #node_id = tree._add_node(_TREE_UNDEFINED, 0, 1, 0,0, 0, 0,0)
+            #printf("empty node %d added\n", node_id)
 
             #rc = 0
             #while rc<node_id*tree.value_stride:
@@ -1230,7 +1424,7 @@ cdef class Tree:
         # output of self.apply(X) is a vector of indices
         # get the prediction
 
-
+        #print(self.apply(X))
 
         out = self._get_value_ndarray().take(self.apply(X), axis=0,
                                              mode='clip')
@@ -1238,7 +1432,6 @@ cdef class Tree:
 
         if self.n_outputs == 1:
             out = out.reshape(X.shape[0], self.max_n_classes)
-        #print(out)
         return out
 
     cpdef np.ndarray get_margins(self, object X):
@@ -1307,7 +1500,7 @@ cdef class Tree:
         while not len(stack) == 0:
             node_count = node_count + 1
             node = &self.nodes[stack.pop()]
-            #printf("current node: %d\n", node.node_id)
+            #printf("%d, ", node.node_id)
             #printf("current node samples: %d\n", node.n_node_samples)
             #printf("left node: %d\n", node.left_child)
             #printf("right node: %d\n", node.right_child)
