@@ -877,9 +877,13 @@ def check_random_state(seed):
         If seed is already a RandomState instance, return it.
         Otherwise raise ValueError.
     """
+    #print("wat")
     if seed is None or seed is np.random:
         return np.random.mtrand._rand
     if isinstance(seed, numbers.Integral):
+        #print("waat")
+        ret = np.random.RandomState(seed)
+        #print("waaat")
         return np.random.RandomState(seed)
     if isinstance(seed, np.random.RandomState):
         return seed

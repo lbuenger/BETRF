@@ -41,6 +41,7 @@ Single and multi-output problems are both handled.
 
 
 import numbers
+import time
 from warnings import catch_warnings, simplefilter, warn
 import threading
 
@@ -119,7 +120,12 @@ def _generate_sample_indices(random_state, n_samples, n_samples_bootstrap):
     """
     Private function used to _parallel_build_trees function."""
 
+    np.random.RandomState(random_state)
+
+
+    #print("häää")
     random_instance = check_random_state(random_state)
+    #print("hä")
     sample_indices = random_instance.randint(0, n_samples, n_samples_bootstrap)
 
     return sample_indices
@@ -147,6 +153,7 @@ def _parallel_build_trees(tree, forest, X, y, sample_weight, tree_idx, n_trees,
         print("building tree %d of %d" % (tree_idx + 1, n_trees))
 
     #print("forest.parallel_build_trees: complete_trees = ", complete_trees)
+    #print("in forest.parallel_build_trees")
 
     if forest.bootstrap:
         n_samples = X.shape[0]
@@ -155,10 +162,17 @@ def _parallel_build_trees(tree, forest, X, y, sample_weight, tree_idx, n_trees,
         else:
             curr_sample_weight = sample_weight.copy()
 
+
+
         indices = _generate_sample_indices(tree.random_state, n_samples,
                                            n_samples_bootstrap)
+
+
+
         sample_counts = np.bincount(indices, minlength=n_samples)
         curr_sample_weight *= sample_counts
+
+
 
         if class_weight == 'subsample':
             with catch_warnings():
@@ -170,9 +184,14 @@ def _parallel_build_trees(tree, forest, X, y, sample_weight, tree_idx, n_trees,
                                                         indices=indices)
 
 
+        #print("kommt bis zum fit")
         tree.fit(X, y, rsdt=rsdt, complete_trees=complete_trees, sample_weight=curr_sample_weight, check_input=False)
     else:
+        #print("kommt bis zum fit unten")
         tree.fit(X, y, rsdt, complete_trees=complete_trees, sample_weight=sample_weight, check_input=False)
+
+
+    #print("forest.parallel_build_trees klappt")
 
     return tree
 
@@ -303,6 +322,8 @@ class BaseForest(MultiOutputMixin, BaseEnsemble, metaclass=ABCMeta):
 
         complete_trees = self.complete_trees
 
+        #print("baseforest fit")
+
         #print("forest.baseforest.fit(): complete_trees  = ", complete_trees)
 
         # Validate or convert input data
@@ -316,7 +337,6 @@ class BaseForest(MultiOutputMixin, BaseEnsemble, metaclass=ABCMeta):
             sample_weight = _check_sample_weight(sample_weight, X)
 
         #print("rsdt=", self.rsdt)
-        #print("complete_trees in forest=", self.complete_trees)
 
         if issparse(X):
             # Pre-sort indices to avoid that each individual tree of the
@@ -387,6 +407,8 @@ class BaseForest(MultiOutputMixin, BaseEnsemble, metaclass=ABCMeta):
                                           random_state=random_state)
                      for i in range(n_more_estimators)]
 
+            #print("hallu")
+
             # Parallel loop: we prefer the threading backend as the Cython code
             # for fitting the trees is internally releasing the Python GIL
             # making threading more efficient than multiprocessing in
@@ -403,6 +425,7 @@ class BaseForest(MultiOutputMixin, BaseEnsemble, metaclass=ABCMeta):
 
             # Collect newly grown trees
             self.estimators_.extend(trees)
+
 
         if self.oob_score:
             y_type = type_of_target(y)
@@ -423,6 +446,8 @@ class BaseForest(MultiOutputMixin, BaseEnsemble, metaclass=ABCMeta):
         if hasattr(self, "classes_") and self.n_outputs_ == 1:
             self.n_classes_ = self.n_classes_[0]
             self.classes_ = self.classes_[0]
+
+        #print("baseforest fit klappt")
 
         return self
 
@@ -565,13 +590,15 @@ def _accumulate_prediction(predict, X, out, lock):
     """
     prediction = predict(X, check_input=False)
     #print(prediction)
-    #print(out[0])
+
+
     with lock:
         if len(out) == 1:
             out[0] += prediction
         else:
             for i in range(len(out)):
                 out[i] += prediction[i]
+    #print(out)
 
 
 class ForestClassifier(ClassifierMixin, BaseForest, metaclass=ABCMeta):
@@ -657,6 +684,9 @@ class ForestClassifier(ClassifierMixin, BaseForest, metaclass=ABCMeta):
         )
 
     def _validate_y_class_weight(self, y):
+
+        #print("in _validate_y_class_weight")
+
         check_classification_targets(y)
 
         y = np.copy(y)
@@ -672,6 +702,12 @@ class ForestClassifier(ClassifierMixin, BaseForest, metaclass=ABCMeta):
         for k in range(self.n_outputs_):
             classes_k, y_store_unique_indices[:, k] = \
                 np.unique(y[:, k], return_inverse=True)
+
+            #ADDED FOR COMPLETE TREES
+            #if(self.complete_trees):
+            #    classes_k = np.append(classes_k, classes_k[-1] + 1)
+
+            #print("classes_k = ", classes_k)
             self.classes_.append(classes_k)
             self.n_classes_.append(classes_k.shape[0])
         y = y_store_unique_indices
@@ -704,6 +740,9 @@ class ForestClassifier(ClassifierMixin, BaseForest, metaclass=ABCMeta):
                     class_weight = self.class_weight
                 expanded_class_weight = compute_sample_weight(class_weight,
                                                               y_original)
+
+
+        #print("_validate_y_class_weight klappt")
 
         return y, expanded_class_weight
 
@@ -779,7 +818,7 @@ class ForestClassifier(ClassifierMixin, BaseForest, metaclass=ABCMeta):
         # avoid storing the output of every estimator by summing them here
         # Hier +1 machen hilft nur bei einem...
         #self.n_classes_ = self.n_classes_ + 1
-        print("self.n_classes: ", self.n_classes_)
+        #print("self.n_classes: ", self.n_classes_)
         all_proba = [np.zeros((X.shape[0], j), dtype=np.float64)
                      for j in np.atleast_1d(self.n_classes_)]
         lock = threading.Lock()
@@ -1307,6 +1346,88 @@ class RandomForestClassifier(ForestClassifier):
         self.ccp_alpha = ccp_alpha
         self.rsdt = rsdt
         self.complete_trees = complete_trees
+
+    # Overwrite for classes adujstment for complete trees
+    def _validate_y_class_weight(self, y):
+
+        #print("in RandomForestClassifier _validate_y_class_weight")
+
+        check_classification_targets(y)
+
+        y = np.copy(y)
+        expanded_class_weight = None
+
+        if self.class_weight is not None:
+            y_original = np.copy(y)
+
+        self.classes_ = []
+        self.n_classes_ = []
+
+        y_store_unique_indices = np.zeros(y.shape, dtype=int)
+        for k in range(self.n_outputs_):
+            classes_k, y_store_unique_indices[:, k] = \
+                np.unique(y[:, k], return_inverse=True)
+
+            #ADDED FOR COMPLETE TREES
+            if(self.complete_trees):
+                classes_k = np.append(classes_k, classes_k[-1] + 1)
+
+            #print("classes_k = ", classes_k)
+            self.classes_.append(classes_k)
+            self.n_classes_.append(classes_k.shape[0])
+        y = y_store_unique_indices
+
+        if self.class_weight is not None:
+            valid_presets = ('balanced', 'balanced_subsample')
+            if isinstance(self.class_weight, str):
+                if self.class_weight not in valid_presets:
+                    raise ValueError('Valid presets for class_weight include '
+                                     '"balanced" and "balanced_subsample".'
+                                     'Given "%s".'
+                                     % self.class_weight)
+                if self.warm_start:
+                    warn('class_weight presets "balanced" or '
+                         '"balanced_subsample" are '
+                         'not recommended for warm_start if the fitted data '
+                         'differs from the full dataset. In order to use '
+                         '"balanced" weights, use compute_class_weight '
+                         '("balanced", classes, y). In place of y you can use '
+                         'a large enough sample of the full training set '
+                         'target to properly estimate the class frequency '
+                         'distributions. Pass the resulting weights as the '
+                         'class_weight parameter.')
+
+            if (self.class_weight != 'balanced_subsample' or
+                    not self.bootstrap):
+                if self.class_weight == "balanced_subsample":
+                    class_weight = "balanced"
+                else:
+                    class_weight = self.class_weight
+                expanded_class_weight = compute_sample_weight(class_weight,
+                                                              y_original)
+
+
+        #print("_validate_y_class_weight klappt")
+
+        return y, expanded_class_weight
+
+    def _accumulate_prediction(predict, X, out, lock):
+        """
+        This is a utility function for joblib's Parallel.
+
+        It can't go locally in ForestClassifier or ForestRegressor, because joblib
+        complains that it cannot pickle it when placed there.
+        """
+        prediction = predict(X, check_input=False)
+        print(prediction)
+
+        with lock:
+            if len(out) == 1:
+                out[0] += prediction
+            else:
+                for i in range(len(out)):
+                    out[i] += prediction[i]
+        # print(out)
 
 
 class RandomForestRegressor(ForestRegressor):

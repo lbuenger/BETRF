@@ -1,4 +1,4 @@
- # cython: cdivision=True
+import gc  # cython: cdivision=True
 # cython: boundscheck=False
 # cython: wraparound=False
 
@@ -148,7 +148,7 @@ cdef class DepthFirstTreeBuilder(TreeBuilder):
                 np.ndarray sample_weight=None):
         """Build a decision tree from the training set (X, y)."""
 
-        print("in build() of _tree.pyx in DepthFirstTreeBuilder")
+        #print("in build() of _tree.pyx in DepthFirstTreeBuilder")
 
         # check input
         X, y, sample_weight = self._check_input(X, y, sample_weight)
@@ -164,6 +164,9 @@ cdef class DepthFirstTreeBuilder(TreeBuilder):
             init_capacity = (2 ** (tree.max_depth + 1)) - 1
         else:
             init_capacity = 2047
+
+        #printf("init_capacity = %d\n", init_capacity)
+        #printf("tree.max_depth = %d\n", tree.max_depth)
 
         tree._resize(init_capacity)
 
@@ -307,7 +310,7 @@ cdef class BreadthFirstTreeBuilder(TreeBuilder):
                 np.ndarray sample_weight=None):
         """Build a decision tree from the training set (X, y)."""
 
-        print("in build() of _tree.pyx in DepthFirstTreeBuilder")
+        print("in build() of _tree.pyx in BreadthFirstTreeBuilder")
 
         # check input
         X, y, sample_weight = self._check_input(X, y, sample_weight)
@@ -465,7 +468,7 @@ cdef class CompleteRobustTreeBuilder(TreeBuilder):
                 np.ndarray sample_weight=None):
         """Build a decision tree from the training set (X, y)."""
 
-        print("in build() of _tree.pyx in CompleteRobustTreeBuilder")
+        #print("in build() of _tree.pyx in CompleteRobustTreeBuilder")
 
         tree.complete_tree = self.complete_tree
 
@@ -520,11 +523,14 @@ cdef class CompleteRobustTreeBuilder(TreeBuilder):
         cdef bint is_placeholder = 0
         cdef SIZE_t placeholder_depth = 0
 
-        cdef int[:] tree_features = np.empty(init_capacity, dtype=np.int32)
-        cdef double[:] tree_thresholds = np.empty(init_capacity, dtype=np.double)
-        cdef double[:] tree_impurities = np.empty(init_capacity, dtype=np.double)
-        cdef int[:] tree_node_n_samples = np.empty(init_capacity, dtype=np.int32)
-        cdef double[:] tree_weighted_node_n_samples = np.empty(init_capacity, dtype=np.double)
+        #printf("init_capacity = %d\n", init_capacity)
+        #printf("tree.max_depth = %d\n", tree.max_depth)
+        #printf("self.max_depth = %d\n", self.max_depth)
+        cdef int[:] tree_features = np.empty(2**(self.max_depth+1), dtype=np.int32)
+        cdef double[:] tree_thresholds = np.empty(2**(self.max_depth+1), dtype=np.double)
+        cdef double[:] tree_impurities = np.empty(2**(self.max_depth+1), dtype=np.double)
+        cdef int[:] tree_node_n_samples = np.empty(2**(self.max_depth+1), dtype=np.int32)
+        cdef double[:] tree_weighted_node_n_samples = np.empty(2**(self.max_depth+1), dtype=np.double)
         cdef int p_d
         cdef int p
         cdef int id
@@ -586,6 +592,9 @@ cdef class CompleteRobustTreeBuilder(TreeBuilder):
                         node_id = tree._add_node(parent, is_left, 0,
                                                  tree_features[0], tree_thresholds[0], tree_impurities[0],
                                                  tree_node_n_samples[0], tree_weighted_node_n_samples[0])
+                        #node_id = tree._add_node(parent, is_left, 0,
+                        #                         0, 0, 0,
+                        #                         0, 0)
                         #printf("placeholder %d added, duplicate of root, depth = %d, placeholder_depth = %d\n", node_id, depth, placeholder_depth)
                         if log_building:
                             printf("%d, root copy,\t\tdepth: %d, placeholder_depth: %d, is_leaf: %d\n", node_id, depth, placeholder_depth, 0)
@@ -622,6 +631,7 @@ cdef class CompleteRobustTreeBuilder(TreeBuilder):
 
                     #Add parameters of node to duplicate later
                     #Add parameters of leaf just as usual for leaf placement at end/actual leaf position
+                    #printf("node_id = %d\n", node_id)
                     tree_features[node_id] = split.feature
                     tree_thresholds[node_id] = split.threshold
                     tree_impurities[node_id] = impurity
@@ -684,6 +694,10 @@ cdef class CompleteRobustTreeBuilder(TreeBuilder):
                                                  tree_features[parent], tree_thresholds[parent],
                                                  tree_impurities[parent],
                                                  tree_node_n_samples[parent], tree_weighted_node_n_samples[parent])
+                        #node_id = tree._add_node(parent, is_left, is_leaf,
+                        #                         0, 0,
+                        #                         0,
+                        #                         0, 0)
                         if log_building:
                             printf("%d, dummy parent copy,\tdepth: %d, placeholder_depth: %d, is_leaf: %d, parent: %d\n", node_id,
                                    depth, placeholder_depth, is_leaf, parent)
@@ -762,6 +776,10 @@ cdef class CompleteRobustTreeBuilder(TreeBuilder):
                             node_id = tree._add_node(parent, is_left, is_leaf,
                                                      tree_features[p], tree_thresholds[p], tree_impurities[p],
                                                      tree_node_n_samples[p], tree_weighted_node_n_samples[p])
+                            #node_id = tree._add_node(parent, is_left, is_leaf,
+                            #                         0, 0,
+                            #                         0,
+                            #                         0, 0)
                             #printf("actual leaf %d added, duplicates = %d, depth = %d, placeholder_depth = %d\n", node_id, p, depth, placeholder_depth)
                             if log_building:
                                 printf("%d, leaf copy,\t\tdepth: %d, placeholder_depth: %d, is_leaf: %d, duplicates: %d, max depth reached\n", node_id,
@@ -792,6 +810,10 @@ cdef class CompleteRobustTreeBuilder(TreeBuilder):
                             node_id = tree._add_node(parent, is_left, is_leaf,
                                                      tree_features[p], tree_thresholds[p], tree_impurities[p],
                                                      tree_node_n_samples[p], tree_weighted_node_n_samples[p])
+                            #node_id = tree._add_node(parent, is_left, is_leaf,
+                            #                         0, 0,
+                            #                         0,
+                            #                         0, 0)
                             #printf("actual leaf %d added, duplicates = %d, depth = %d, placeholder_depth = %d\n", node_id, p, depth, placeholder_depth)
                             if log_building:
                                 printf("%d, leaf copy,\t\tdepth: %d, placeholder_depth: %d, is_leaf: %d, duplicates: %d, no duplicates\n", node_id, depth, placeholder_depth, is_leaf, p)
@@ -820,6 +842,10 @@ cdef class CompleteRobustTreeBuilder(TreeBuilder):
                             node_id = tree._add_node(parent, is_left, is_leaf,
                                                      tree_features[p], tree_thresholds[p], tree_impurities[p],
                                                      tree_node_n_samples[p], tree_weighted_node_n_samples[p])
+                            #node_id = tree._add_node(parent, is_left, is_leaf,
+                            #                         0, 0,
+                            #                         0,
+                            #                         0, 0)
                             #printf("placeholder %d added, duplicates = %d, depth = %d, placeholder_depth = %d\n", node_id, p, depth, placeholder_depth)
                             if log_building:
                                 printf("%d, duplicate,\t\tdepth: %d, placeholder_depth: %d, is_leaf: %d, duplicates: %d, parent: %d\n", node_id, depth, placeholder_depth, is_leaf, p, parent)
@@ -1514,8 +1540,6 @@ cdef class Tree:
         #printf("node_count = %d\n", node_count)
 
         #print(out)
-
-        # printf("complete_trees in tree = %d\n", self.complete_tree)
 
         #printf("tree.apply_dense(): complete_trees = %d\n", self.complete_tree)
 

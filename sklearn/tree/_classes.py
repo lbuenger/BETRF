@@ -145,6 +145,7 @@ class BaseDecisionTree(MultiOutputMixin, BaseEstimator, metaclass=ABCMeta):
     def fit(self, X, y, sample_weight=None, check_input=True,
             X_idx_sorted="deprecated", rsdt=0, complete_trees=0):
 
+        #print("in classes.fit()")
         #print("classes.fit(): complete_trees = ", complete_trees)
         #print("random_state = ", self.random_state)
 
@@ -399,7 +400,8 @@ class BaseDecisionTree(MultiOutputMixin, BaseEstimator, metaclass=ABCMeta):
 
         # print("Initializing builders")
         # Use BestFirst if max_leaf_nodes given; use DepthFirst otherwise
-        print("complete_trees in classes = ", complete_trees)
+        #print("complete_trees in classes = ", complete_trees)
+        #print("max depth in classes = ", max_depth)
         if complete_trees == 0:
         #if False:
             if max_leaf_nodes < 0:
@@ -950,6 +952,10 @@ class DecisionTreeClassifier(ClassifierMixin, BaseDecisionTree):
             Fitted estimator.
         """
 
+        self.complete_trees = complete_trees
+        #print("complete_trees = ", complete_trees)
+        #print("self.complete_trees = ", self.complete_trees)
+
         #complete_trees = self.complete_trees
 
         super().fit(
@@ -990,11 +996,20 @@ class DecisionTreeClassifier(ClassifierMixin, BaseDecisionTree):
         proba = self.tree_.predict(X)
         #print(proba)
 
+        #print("predict_proba.self.complete_trees = ", self.complete_trees)
+
+
         if self.n_outputs_ == 1:
             proba = proba[:, :self.n_classes_]
             normalizer = proba.sum(axis=1)[:, np.newaxis]
             normalizer[normalizer == 0.0] = 1.0
             proba /= normalizer
+
+            #Delete last output if complete_trees
+            if self.complete_trees:
+                proba[:, -1] = 0
+
+                #print(proba)
 
             return proba
 
