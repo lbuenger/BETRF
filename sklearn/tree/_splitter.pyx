@@ -441,7 +441,7 @@ cdef class BestSplitter(BaseDenseSplitter):
                     loopcounter = 0
 
                     rsd_threshold = self.rsdt
-                    #printf("fresh rsdt = %f\n", rsd_threshold)
+                    #printf("rsdt = %f\n", rsd_threshold)
                     loopcounter += 1
 
                     # calculate relative rsd_threshold

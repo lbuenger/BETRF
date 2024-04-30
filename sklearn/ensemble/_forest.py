@@ -146,13 +146,13 @@ def _generate_unsampled_indices(random_state, n_samples, n_samples_bootstrap):
 
 def _parallel_build_trees(tree, forest, X, y, sample_weight, tree_idx, n_trees,
                           verbose=0, class_weight=None,
-                          n_samples_bootstrap=None, rsdt=0, complete_trees=0):
+                          n_samples_bootstrap=None, rsdt=0, complete_trees=0, complete_redundant_trees=0):
     """
     Private function used to fit a single tree in parallel."""
     if verbose > 1:
         print("building tree %d of %d" % (tree_idx + 1, n_trees))
 
-    #print("forest.parallel_build_trees: complete_trees = ", complete_trees)
+    #xprint("forest.parallel_build_trees: complete_trees = ", complete_trees)
     #print("in forest.parallel_build_trees")
 
     if forest.bootstrap:
@@ -185,10 +185,12 @@ def _parallel_build_trees(tree, forest, X, y, sample_weight, tree_idx, n_trees,
 
 
         #print("kommt bis zum fit")
-        tree.fit(X, y, rsdt=rsdt, complete_trees=complete_trees, sample_weight=curr_sample_weight, check_input=False)
+        tree.fit(X, y, rsdt=rsdt, complete_trees=complete_trees, complete_redundant_trees=complete_redundant_trees,
+                 sample_weight=curr_sample_weight, check_input=False)
     else:
         #print("kommt bis zum fit unten")
-        tree.fit(X, y, rsdt, complete_trees=complete_trees, sample_weight=sample_weight, check_input=False)
+        tree.fit(X, y, rsdt, complete_trees=complete_trees, complete_redundant_trees=complete_redundant_trees,
+                 sample_weight=sample_weight, check_input=False)
 
 
     #print("forest.parallel_build_trees klappt")
@@ -293,7 +295,7 @@ class BaseForest(MultiOutputMixin, BaseEnsemble, metaclass=ABCMeta):
 
         return sparse_hstack(indicators).tocsr(), n_nodes_ptr
 
-    def fit(self, X, y, rsdt=0, complete_trees=0, sample_weight=None):
+    def fit(self, X, y, rsdt=0, complete_trees=0, complete_redundant_trees=0, sample_weight=None):
         """
         Build a forest of trees from the training set (X, y).
 
@@ -321,6 +323,7 @@ class BaseForest(MultiOutputMixin, BaseEnsemble, metaclass=ABCMeta):
         """
 
         complete_trees = self.complete_trees
+        complete_redundant_trees = self.complete_redundant_trees
 
         #print("baseforest fit")
 
@@ -420,7 +423,8 @@ class BaseForest(MultiOutputMixin, BaseEnsemble, metaclass=ABCMeta):
                 delayed(_parallel_build_trees)(
                     t, self, X, y, sample_weight, i, len(trees),
                     verbose=self.verbose, class_weight=self.class_weight,
-                    n_samples_bootstrap=n_samples_bootstrap, rsdt=rsdt, complete_trees=complete_trees)
+                    n_samples_bootstrap=n_samples_bootstrap, rsdt=rsdt, complete_trees=complete_trees,
+                    complete_redundant_trees=complete_redundant_trees)
                 for i, t in enumerate(trees))
 
             # Collect newly grown trees
@@ -828,7 +832,13 @@ class ForestClassifier(ClassifierMixin, BaseForest, metaclass=ABCMeta):
                                             lock)
             for e in self.estimators_)
 
+
+
         for proba in all_proba:
+            # CHECK IF THIS IS NEEDED
+            # Delete last output if complete_redundant_trees
+            #if self.complete_redundant_trees:
+            #    proba[:, -1] = 0
             proba /= len(self.estimators_)
 
         if len(all_proba) == 1:
@@ -1296,7 +1306,8 @@ class RandomForestClassifier(ForestClassifier):
     @_deprecate_positional_args
     def __init__(self,
                  n_estimators=100, *,
-                 criterion="gini",
+                 #criterion="gini",
+                 criterion="entropy",
                  max_depth=None,
                  min_samples_split=2,
                  min_samples_leaf=1,
@@ -1316,7 +1327,8 @@ class RandomForestClassifier(ForestClassifier):
                  max_samples=None,
                  #ADDED FOR RSD
                  rsdt=0,
-                 complete_trees=0):
+                 complete_trees=0,
+                 complete_redundant_trees=0):
         super().__init__(
             base_estimator=DecisionTreeClassifier(),
             n_estimators=n_estimators,
@@ -1346,6 +1358,7 @@ class RandomForestClassifier(ForestClassifier):
         self.ccp_alpha = ccp_alpha
         self.rsdt = rsdt
         self.complete_trees = complete_trees
+        self.complete_redundant_trees = complete_redundant_trees
 
     # Overwrite for classes adujstment for complete trees
     def _validate_y_class_weight(self, y):
@@ -1369,7 +1382,7 @@ class RandomForestClassifier(ForestClassifier):
                 np.unique(y[:, k], return_inverse=True)
 
             #ADDED FOR COMPLETE TREES
-            if(self.complete_trees):
+            if(self.complete_redundant_trees):
                 classes_k = np.append(classes_k, classes_k[-1] + 1)
 
             #print("classes_k = ", classes_k)
@@ -2541,7 +2554,7 @@ class RandomTreesEmbedding(BaseForest):
     def _set_oob_score_and_attributes(self, X, y):
         raise NotImplementedError("OOB score not supported by tree embedding")
 
-    def fit(self, X, y=None, rsdt=0, complete_trees=0, sample_weight=None):
+    def fit(self, X, y=None, rsdt=0, complete_trees=0, complete_redundant_trees=0, sample_weight=None):
         """
         Fit estimator.
 

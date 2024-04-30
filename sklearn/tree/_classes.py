@@ -20,6 +20,7 @@ import copy
 from abc import ABCMeta
 from abc import abstractmethod
 from math import ceil
+import time
 
 import numpy as np
 from scipy.sparse import issparse
@@ -41,8 +42,8 @@ from ..utils.validation import _deprecate_positional_args
 from ._criterion import Criterion
 from ._splitter import Splitter
 from ._tree import DepthFirstTreeBuilder
-from ._tree import BreadthFirstTreeBuilder
-from ._tree import CompleteRobustTreeBuilder
+from ._tree import CompleteTreeBuilder
+from ._tree import CompleteRedundantTreeBuilder
 from ._tree import BestFirstTreeBuilder
 from ._tree import Tree
 from ._tree import _build_pruned_tree_ccp
@@ -143,7 +144,7 @@ class BaseDecisionTree(MultiOutputMixin, BaseEstimator, metaclass=ABCMeta):
         return self.tree_.n_leaves
 
     def fit(self, X, y, sample_weight=None, check_input=True,
-            X_idx_sorted="deprecated", rsdt=0, complete_trees=0):
+            X_idx_sorted="deprecated", rsdt=0, complete_trees=0, complete_redundant_trees=0):
 
         #print("in classes.fit()")
         #print("classes.fit(): complete_trees = ", complete_trees)
@@ -212,7 +213,7 @@ class BaseDecisionTree(MultiOutputMixin, BaseEstimator, metaclass=ABCMeta):
                 classes_k, y_encoded[:, k] = np.unique(y[:, k],
                                                        return_inverse=True)
 
-                if complete_trees:
+                if complete_redundant_trees:
                     classes_k = np.append(classes_k, classes_k[-1]+1)
                 #print(classes_k)
 
@@ -379,6 +380,7 @@ class BaseDecisionTree(MultiOutputMixin, BaseEstimator, metaclass=ABCMeta):
 
         splitter = self.splitter
         #print("Initializing splitter", splitter)
+        #print("Criterion = ", self.criterion)
         if not isinstance(self.splitter, Splitter):
             splitter = SPLITTERS[self.splitter](criterion,
                                                 self.max_features_,
@@ -424,17 +426,29 @@ class BaseDecisionTree(MultiOutputMixin, BaseEstimator, metaclass=ABCMeta):
                                                max_leaf_nodes,
                                                self.min_impurity_decrease,
                                                min_impurity_split)
+        #elif False:
+        elif complete_redundant_trees == 1:
+            builder = CompleteRedundantTreeBuilder(splitter,
+                                                   min_samples_split,
+                                                   min_samples_leaf,
+                                                   min_weight_leaf,
+                                                   max_depth,
+                                                   self.min_impurity_decrease,
+                                                   min_impurity_split,
+                                                   complete_trees,
+                                                   complete_redundant_trees)
         else:
-            builder = CompleteRobustTreeBuilder(splitter,
-                                                min_samples_split,
-                                                min_samples_leaf,
-                                                min_weight_leaf,
-                                                max_depth,
-                                                self.min_impurity_decrease,
-                                                min_impurity_split,
-                                                complete_trees)
+            builder = CompleteTreeBuilder(splitter,
+                                            min_samples_split,
+                                            min_samples_leaf,
+                                            min_weight_leaf,
+                                            max_depth,
+                                            self.min_impurity_decrease,
+                                            min_impurity_split,
+                                            complete_trees)
 
         # print("Build tree")
+
         builder.build(self.tree_, X, y, sample_weight)
 
         if self.n_outputs_ == 1 and is_classifier(self):
@@ -883,7 +897,8 @@ class DecisionTreeClassifier(ClassifierMixin, BaseDecisionTree):
     """
     @_deprecate_positional_args
     def __init__(self, *,
-                 criterion="gini",
+                 #criterion="gini",
+                 criterion="entropy",
                  splitter="best",
                  max_depth=None,
                  min_samples_split=2,
@@ -897,7 +912,8 @@ class DecisionTreeClassifier(ClassifierMixin, BaseDecisionTree):
                  class_weight=None,
                  ccp_alpha=0.0,
                  rsdt=0,
-                 complete_trees=0):
+                 complete_trees=0,
+                 complete_redundant_trees=0):
         super().__init__(
             criterion=criterion,
             splitter=splitter,
@@ -914,8 +930,9 @@ class DecisionTreeClassifier(ClassifierMixin, BaseDecisionTree):
             ccp_alpha=ccp_alpha)
         self.rsdt=rsdt
         self.complete_trees=complete_trees
+        self.complete_redundant_trees=complete_redundant_trees
 
-    def fit(self, X, y, rsdt=0, complete_trees=0, sample_weight=None, check_input=True,
+    def fit(self, X, y, rsdt=0, complete_trees=0, complete_redundant_trees=0, sample_weight=None, check_input=True,
             X_idx_sorted="deprecated"):
         """Build a decision tree classifier from the training set (X, y).
 
@@ -953,6 +970,7 @@ class DecisionTreeClassifier(ClassifierMixin, BaseDecisionTree):
         """
 
         self.complete_trees = complete_trees
+        self.complete_redundant_trees=complete_redundant_trees
         #print("complete_trees = ", complete_trees)
         #print("self.complete_trees = ", self.complete_trees)
 
@@ -964,7 +982,8 @@ class DecisionTreeClassifier(ClassifierMixin, BaseDecisionTree):
             check_input=check_input,
             X_idx_sorted=X_idx_sorted,
             rsdt=rsdt,
-            complete_trees=complete_trees)
+            complete_trees=complete_trees,
+            complete_redundant_trees=complete_redundant_trees)
         return self
 
     def predict_proba(self, X, check_input=True):
@@ -1005,8 +1024,8 @@ class DecisionTreeClassifier(ClassifierMixin, BaseDecisionTree):
             normalizer[normalizer == 0.0] = 1.0
             proba /= normalizer
 
-            #Delete last output if complete_trees
-            if self.complete_trees:
+            #Delete last output if complete_redundant_trees
+            if self.complete_redundant_trees:
                 proba[:, -1] = 0
 
                 #print(proba)

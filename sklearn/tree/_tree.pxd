@@ -84,6 +84,7 @@ cdef class Tree:
 
     # Added by me
     cdef public bint complete_tree
+    cdef public bint complete_redundant_tree
 
     # Methods
     cdef SIZE_t _add_node(self, SIZE_t parent, bint is_left, bint is_leaf,
@@ -132,6 +133,7 @@ cdef class TreeBuilder:
     cdef double min_impurity_split
     cdef double min_impurity_decrease   # Impurity threshold for early stopping
     cdef bint complete_tree
+    cdef bint complete_redundant_tree
 
     cpdef build(self, Tree tree, object X, np.ndarray y,
                 np.ndarray sample_weight=*)

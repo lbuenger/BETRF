@@ -187,7 +187,7 @@ cdef class Criterion:
         cdef double impurity_right
         self.children_impurity(&impurity_left, &impurity_right)
 
-        # printf("Does this get called?\n")
+        #printf("Proxy in base\n")
 
         return (- self.weighted_n_right * impurity_right
                 - self.weighted_n_left * impurity_left)
@@ -198,7 +198,7 @@ cdef class Criterion:
         self.switched_children_impurity(&impurity_left, &impurity_right, left, mid, right)
 
 
-        # printf("Does this get called?\n")
+        #printf("Switched Proxy in base\n")
 
         return (- self.weighted_n_right * impurity_right
                 - self.weighted_n_left * impurity_left)
@@ -498,6 +498,7 @@ cdef class ClassificationCriterion(Criterion):
 
                 self.weighted_n_left -= w
 
+
         # Update right part statistics
         self.weighted_n_right = self.weighted_n_node_samples - self.weighted_n_left
         for k in range(self.n_outputs):
@@ -507,6 +508,9 @@ cdef class ClassificationCriterion(Criterion):
             sum_right += self.sum_stride
             sum_left += self.sum_stride
             sum_total += self.sum_stride
+
+
+        #printf("update in CC\n")
 
         self.pos = new_pos
         return 0
@@ -619,26 +623,36 @@ cdef class Entropy(ClassificationCriterion):
         impurity_right[0] = entropy_right / self.n_outputs
 
     cdef void switched_children_impurity(self,
-                                           double* impurity_left,
-                                           double* impurity_right,
-                                           SIZE_t left,
-                                           SIZE_t mid,
-                                           SIZE_t right) nogil:
+                                         double* impurity_left,
+                                         double* impurity_right,
+                                         SIZE_t left,
+                                         SIZE_t mid,
+                                         SIZE_t right) nogil:
 
         cdef SIZE_t * n_classes = self.n_classes
         cdef double * sum_left = self.sum_left
         cdef double * sum_right = self.sum_right
         cdef double entropy_left = 0.0
         cdef double entropy_right = 0.0
-        cdef double * count_left
-        cdef double * weight_left
-        cdef double * count_right
-        cdef double * weight_right
+        #cdef double * count_left
+        #cdef double * weight_left
+        #cdef double * count_right
+        #cdef double * weight_right
+        cdef int size = n_classes[0]
+        #cdef double[:] weight_left = np.empty(n_classes[0], dtype=np.double)
+        #cdef double[:] count_right = np.empty(n_classes[0], dtype=np.double)
+        #cdef double[:] weight_right = np.empty(n_classes[0], dtype=np.double)
         cdef double count_k
         cdef SIZE_t k
         cdef SIZE_t c
 
-        self.reset()
+        cdef double[100] count_left
+        cdef double[100] weight_left
+        cdef double[100] count_right
+        cdef double[100] weight_right
+
+        #printf("Switched in Entropy\n")
+
         self.update(left)
         for k in range(self.n_outputs):
             for c in range(n_classes[k]):
@@ -651,7 +665,8 @@ cdef class Entropy(ClassificationCriterion):
             # sum_left += self.sum_stride
             # sum_right += self.sum_stride
 
-        self.reset()
+
+
         self.update(right)
         for k in range(self.n_outputs):
             for c in range(n_classes[k]):
@@ -664,7 +679,7 @@ cdef class Entropy(ClassificationCriterion):
             # sum_left += self.sum_stride
             # sum_right += self.sum_stride
 
-        self.reset()
+
         self.update(mid)
         for k in range(self.n_outputs):
             for c in range(n_classes[k]):
@@ -693,11 +708,11 @@ cdef class Entropy(ClassificationCriterion):
                 entropy_right -= count_k * log(count_k)
 
 
-
         impurity_left[0] = entropy_left / self.n_outputs
         impurity_right[0] = entropy_right / self.n_outputs
 
-        self.reset()
+
+        self.update(mid)
 
 
 cdef class Gini(ClassificationCriterion):
@@ -785,6 +800,8 @@ cdef class Gini(ClassificationCriterion):
         cdef SIZE_t k
         cdef SIZE_t c
 
+        #printf("child_imp in gini\n")
+
         # with gil:
         #     print("children_impurity()")
 
@@ -810,6 +827,10 @@ cdef class Gini(ClassificationCriterion):
 
         impurity_left[0] = gini_left / self.n_outputs
         impurity_right[0] = gini_right / self.n_outputs
+
+    #cdef double switched_proxy_impurity_improvement(self, SIZE_t left, SIZE_t mid, SIZE_t right) nogil:
+    #    printf("Switched in Gini\n")
+    #    return 2
 
 
 cdef class RegressionCriterion(Criterion):
@@ -1062,6 +1083,7 @@ cdef class MSE(RegressionCriterion):
                 proxy_impurity_right / self.weighted_n_right)
 
     cdef double switched_proxy_impurity_improvement(self, SIZE_t left, SIZE_t mid, SIZE_t right) nogil:
+        #printf("Switched in MSE")
         return 2
 
     cdef void children_impurity(self, double* impurity_left,
@@ -1450,6 +1472,7 @@ cdef class FriedmanMSE(MSE):
         return diff * diff / (self.weighted_n_left * self.weighted_n_right)
 
     cdef double switched_proxy_impurity_improvement(self, SIZE_t left, SIZE_t mid, SIZE_t right) nogil:
+        #printf("Switched in FMSE")
         return 3
 
     cdef double impurity_improvement(self, double impurity_parent, double
@@ -1544,7 +1567,7 @@ cdef class Poisson(RegressionCriterion):
         return - proxy_impurity_left - proxy_impurity_right
 
     cdef double switched_proxy_impurity_improvement(self, SIZE_t left, SIZE_t mid, SIZE_t right) nogil:
-        return 4
+        printf("JUNGEEEEEE")
 
     cdef void children_impurity(self, double* impurity_left,
                                 double* impurity_right) nogil:

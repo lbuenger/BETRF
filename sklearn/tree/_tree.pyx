@@ -254,6 +254,12 @@ cdef class DepthFirstTreeBuilder(TreeBuilder):
                 node_id = tree._add_node(parent, is_left, is_leaf, split.feature,
                                          split.threshold, impurity, n_node_samples,
                                          weighted_n_node_samples)
+                """
+                if(is_leaf):
+                    printf("%d: leaf added, feature: %d, threshold: %f\n", node_id, split.feature, split.threshold)
+                else:
+                    printf("%d: node added, feature: %d, threshold: %f\n", node_id, split.feature, split.threshold)
+                """
 
                 if node_id == SIZE_MAX:
                     rc = -1
@@ -287,12 +293,14 @@ cdef class DepthFirstTreeBuilder(TreeBuilder):
         if rc == -1:
             raise MemoryError()
 
+        #printf("Tree build\n")
 
 
-# Breadth first builder ---------------------------------------------------------
 
-cdef class BreadthFirstTreeBuilder(TreeBuilder):
-    """Build a decision tree in breadth-first fashion."""
+# Complete tree builder ---------------------------------------------------------
+
+cdef class CompleteTreeBuilder(TreeBuilder):
+    """Build a complete decision tree in breadth-first fashion."""
 
     def __cinit__(self, Splitter splitter, SIZE_t min_samples_split,
                   SIZE_t min_samples_leaf, double min_weight_leaf,
@@ -305,12 +313,15 @@ cdef class BreadthFirstTreeBuilder(TreeBuilder):
         self.max_depth = max_depth
         self.min_impurity_decrease = min_impurity_decrease
         self.min_impurity_split = min_impurity_split
+        self.complete_tree = complete_tree
 
     cpdef build(self, Tree tree, object X, np.ndarray y,
                 np.ndarray sample_weight=None):
         """Build a decision tree from the training set (X, y)."""
 
-        print("in build() of _tree.pyx in BreadthFirstTreeBuilder")
+        #print("in build() of _tree.pyx in CompleteTreeBuilder")
+
+        tree.complete_tree = self.complete_tree
 
         # check input
         X, y, sample_weight = self._check_input(X, y, sample_weight)
@@ -360,13 +371,24 @@ cdef class BreadthFirstTreeBuilder(TreeBuilder):
         cdef bint first = 1
         cdef SIZE_t max_depth_seen = -1
         cdef int rc = 0
+        cdef bint is_placeholder = 0
+        cdef SIZE_t placeholder_depth = 0
+
+        #printf("init_capacity = %d\n", init_capacity)
+        #printf("tree.max_depth = %d\n", tree.max_depth)
+        #printf("self.max_depth = %d\n", self.max_depth)
+        cdef int p_d
+        cdef int p
+        cdef int id
 
         cdef Queue queue = Queue(INITIAL_STACK_SIZE)
         cdef QueueRecord queue_record
 
+        cdef bint log_building = False
+
         with nogil:
-            # push root node onto stack
-            rc = queue.enqueue(0, n_node_samples, 0, _TREE_UNDEFINED, 0, INFINITY, 0, 0, 0)
+            # push root node onto queue
+            rc = queue.enqueue(0, n_node_samples, 0, _TREE_UNDEFINED, 0, INFINITY, 0, is_placeholder, placeholder_depth)
             if rc == -1:
                 # got return code -1 - out-of-memory
                 with gil:
@@ -382,6 +404,13 @@ cdef class BreadthFirstTreeBuilder(TreeBuilder):
                 is_left = queue_record.is_left
                 impurity = queue_record.impurity
                 n_constant_features = queue_record.n_constant_features
+                is_placeholder = queue_record.is_placeholder
+                placeholder_depth = queue_record.placeholder_depth
+
+                #printf("is_placeholder = %d\n ", is_placeholder)
+
+
+                # Node is no placeholder, build tree just as usual except for leaf
 
                 n_node_samples = end - start
                 splitter.node_reset(start, end, &weighted_n_node_samples)
@@ -414,6 +443,15 @@ cdef class BreadthFirstTreeBuilder(TreeBuilder):
                                          split.threshold, impurity, n_node_samples,
                                          weighted_n_node_samples)
 
+                """
+                if(is_placeholder):
+                    printf("%d: placeholder added\t, depth: %d, placeholder_depth: %d, feature: %d, threshold: %f\n", node_id, depth, placeholder_depth, split.feature, split.threshold)
+                elif(is_leaf):
+                    printf("%d: leaf added\t\t, depth: %d, placeholder_depth: %d, feature: %d, threshold: %f\n", node_id, depth, placeholder_depth, split.feature, split.threshold)
+                else:
+                    printf("%d: node added\t\t, depth: %d, placeholder_depth: %d, feature: %d, threshold: %f\n", node_id, depth, placeholder_depth, split.feature, split.threshold)
+                """
+
                 if node_id == SIZE_MAX:
                     rc = -1
                     break
@@ -423,38 +461,46 @@ cdef class BreadthFirstTreeBuilder(TreeBuilder):
                 splitter.node_value(tree.value + node_id * tree.value_stride)
 
                 if not is_leaf:
-                    # Push right child on stack
-                    rc = queue.enqueue(split.pos, end, depth + 1, node_id, 0,
-                                    split.impurity_right, n_constant_features, 0, 0)
-                    if rc == -1:
-                        break
 
-                    # Push left child on stack
+                    # Push left child on queue
                     rc = queue.enqueue(start, split.pos, depth + 1, node_id, 1,
-                                    split.impurity_left, n_constant_features, 0, 0)
+                                       split.impurity_left, n_constant_features, is_placeholder, placeholder_depth)
                     if rc == -1:
                         break
 
-                if depth > max_depth_seen:
-                    max_depth_seen = depth
+                    # Push right child on queue
+                    rc = queue.enqueue(split.pos, end, depth + 1, node_id, 0,
+                                    split.impurity_right, n_constant_features, is_placeholder, placeholder_depth)
+                    if rc == -1:
+                        break
 
-            if rc >= 0:
-                rc = tree._resize_c(tree.node_count)
+                elif depth < max_depth:
 
-            if rc >= 0:
-                tree.max_depth = max_depth_seen
-        if rc == -1:
-            raise MemoryError()
+                    # No regular nodes can be added, fill up with placeholder nodes
+                    is_placeholder = 1
+
+                    # Push left placeholder child on queue
+                    rc = queue.enqueue(start, end, depth + 1, node_id, 1,
+                                       impurity, n_constant_features, is_placeholder, placeholder_depth+1)
+                    if rc == -1:
+                        break
+
+                    # Push right placeholder child on queue
+                    rc = queue.enqueue(start, end, depth + 1, node_id, 0,
+                                       impurity, n_constant_features, is_placeholder, placeholder_depth+1)
+                    if rc == -1:
+                        break
 
 
 # Complete robust tree builder ----------------------------------------------------------
-cdef class CompleteRobustTreeBuilder(TreeBuilder):
-    """Build a complete robust decision tree in breadth-first fashion."""
+cdef class CompleteRedundantTreeBuilder(TreeBuilder):
+    """Build a complete redundant decision tree in breadth-first fashion."""
 
     def __cinit__(self, Splitter splitter, SIZE_t min_samples_split,
                   SIZE_t min_samples_leaf, double min_weight_leaf,
                   SIZE_t max_depth, double min_impurity_decrease,
-                  double min_impurity_split, SIZE_t complete_tree):
+                  double min_impurity_split, SIZE_t complete_tree,
+                  SIZE_t complete_redundant_tree):
         self.splitter = splitter
         self.min_samples_split = min_samples_split
         self.min_samples_leaf = min_samples_leaf
@@ -463,14 +509,16 @@ cdef class CompleteRobustTreeBuilder(TreeBuilder):
         self.min_impurity_decrease = min_impurity_decrease
         self.min_impurity_split = min_impurity_split
         self.complete_tree = complete_tree
+        self.complete_redundant_tree = complete_redundant_tree
 
     cpdef build(self, Tree tree, object X, np.ndarray y,
                 np.ndarray sample_weight=None):
         """Build a decision tree from the training set (X, y)."""
 
-        #print("in build() of _tree.pyx in CompleteRobustTreeBuilder")
+        #print("in build() of _tree.pyx in CompleteRedundantTreeBuilder")
 
         tree.complete_tree = self.complete_tree
+        tree.complete_redundant_tree = self.complete_redundant_tree
 
         # check input
         X, y, sample_weight = self._check_input(X, y, sample_weight)
@@ -585,7 +633,7 @@ cdef class CompleteRobustTreeBuilder(TreeBuilder):
                                (impurity <= min_impurity_split))
 
                     if (is_leaf and depth < max_depth):
-                        #Is leaf and not at max depth, add duplicate of root
+                        #Is leaf and not at max depth, add duplicate of root\IF
                         #node_id = tree._add_node(parent, is_left, is_leaf,
                         #                         tree_features[0], tree_thresholds[0], tree_impurities[0],
                         #                         tree_node_n_samples[0], tree_weighted_node_n_samples[0])
@@ -956,7 +1004,7 @@ cdef class BestFirstTreeBuilder(TreeBuilder):
                 np.ndarray sample_weight=None):
         """Build a decision tree from the training set (X, y)."""
 
-        printf("bestfirsttreebuilder is used")
+        #printf("bestfirsttreebuilder is used")
 
         # check input
         X, y, sample_weight = self._check_input(X, y, sample_weight)
@@ -1291,6 +1339,7 @@ cdef class Tree:
 
         # Added by me
         self.complete_tree = 0
+        self.complete_redundant_tree = 0
 
     def __dealloc__(self):
         """Destructor."""
@@ -1452,9 +1501,11 @@ cdef class Tree:
 
         #print(self.apply(X))
 
+
+        #print(self._get_value_ndarray())
+
         out = self._get_value_ndarray().take(self.apply(X), axis=0,
                                              mode='clip')
-        #print(self._get_value_ndarray())
 
         if self.n_outputs == 1:
             out = out.reshape(X.shape[0], self.max_n_classes)
@@ -1523,6 +1574,7 @@ cdef class Tree:
         node = self.nodes
         stack = []
         stack.append(0)
+        """
         while not len(stack) == 0:
             node_count = node_count + 1
             node = &self.nodes[stack.pop()]
@@ -1538,6 +1590,7 @@ cdef class Tree:
 
         #Doesnt find extra new node
         #printf("node_count = %d\n", node_count)
+        """
 
         #print(out)
 
