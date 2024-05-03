@@ -212,7 +212,7 @@ class BaseDecisionTree(MultiOutputMixin, BaseEstimator, metaclass=ABCMeta):
             for k in range(self.n_outputs_):
                 classes_k, y_encoded[:, k] = np.unique(y[:, k],
                                                        return_inverse=True)
-
+                #print(classes_k)
                 if complete_redundant_trees:
                     classes_k = np.append(classes_k, classes_k[-1]+1)
                 #print(classes_k)
